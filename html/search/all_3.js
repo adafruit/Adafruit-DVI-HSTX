@@ -13,6 +13,8 @@ var searchData=
   ['dvhstx_5fresolution_5f480x270',['DVHSTX_RESOLUTION_480x270',['../structenum.html#ad4df4a61124c2008d155581b52c3141ea045d0ae94747694ed76effe9692e4680',1,'enum']]],
   ['dvhstx_5fresolution_5f512x384',['DVHSTX_RESOLUTION_512x384',['../structenum.html#ad4df4a61124c2008d155581b52c3141eafcc580aae38186ce39cf9b748089f5bc',1,'enum']]],
   ['dvhstx_5fresolution_5f640x360',['DVHSTX_RESOLUTION_640x360',['../structenum.html#ad4df4a61124c2008d155581b52c3141ea35e59ae4627eb39e4f3b1b01a0f4266d',1,'enum']]],
+  ['dvhstx_5fresolution_5f640x480',['DVHSTX_RESOLUTION_640x480',['../structenum.html#ad4df4a61124c2008d155581b52c3141ead091c3e0876ac7dbe26cb1b7740ef2d1',1,'enum']]],
+  ['dvhstx_5fresolution_5f720x400',['DVHSTX_RESOLUTION_720x400',['../structenum.html#ad4df4a61124c2008d155581b52c3141ea23af33757c0b5e7e0ab51dd9fb50285f',1,'enum']]],
   ['dvhstxresolution',['DVHSTXResolution',['../structenum.html#ad4df4a61124c2008d155581b52c3141e',1,'enum']]],
   ['dvhstxtext',['DVHSTXText',['../class_d_v_h_s_t_x_text.html',1,'DVHSTXText'],['../class_d_v_h_s_t_x_text.html#a2b0681afbca276e5f57d7dfdb50fb8fe',1,'DVHSTXText::DVHSTXText()']]]
 ];

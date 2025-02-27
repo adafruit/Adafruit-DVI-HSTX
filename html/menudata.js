@@ -21,6 +21,10 @@ var menudata={children:[
 {text:"Functions",url:"functions_func.html"},
 {text:"Variables",url:"functions_vars.html"},
 {text:"Enumerations",url:"functions_enum.html"},
-{text:"Enumerator",url:"functions_eval.html"}]}]},
+{text:"Enumerator",url:"functions_eval.html",children:[
+{text:"a",url:"functions_eval.html#index_a"},
+{text:"b",url:"functions_eval.html#index_b"},
+{text:"d",url:"functions_eval.html#index_d"},
+{text:"t",url:"functions_eval.html#index_t"}]}]}]},
 {text:"Files",url:"files.html",children:[
 {text:"File List",url:"files.html"}]}]}

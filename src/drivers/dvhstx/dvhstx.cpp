@@ -209,11 +209,15 @@ void __scratch_x("display") DVHSTX::gfx_dma_handler() {
                         *dst_ptr++ = val;
                         *dst_ptr++ = val;
                     }
-                }
-                else {
+                } else if (h_repeat_shift == 1) {
                     for (int i = 0; i < timing_mode->h_active_pixels; i += 2) {
                         uint32_t val = display_palette[*src_ptr++];
                         *dst_ptr++ = val;
+                        *dst_ptr++ = val;
+                    }
+                } else {
+                    for (int i = 0; i < timing_mode->h_active_pixels; i += 1) {
+                        uint32_t val = display_palette[*src_ptr++];
                         *dst_ptr++ = val;
                     }
                 }

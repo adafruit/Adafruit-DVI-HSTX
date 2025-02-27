@@ -13,10 +13,14 @@ int16_t dvhstx_width(DVHSTXResolution r) {
     return 400;
   case DVHSTX_RESOLUTION_320x240:
     return 320;
+  case DVHSTX_RESOLUTION_640x480:
+    return 640;
   case DVHSTX_RESOLUTION_360x240:
     return 360;
   case DVHSTX_RESOLUTION_360x200:
     return 360;
+  case DVHSTX_RESOLUTION_720x400:
+    return 720;
   case DVHSTX_RESOLUTION_360x288:
     return 360;
   case DVHSTX_RESOLUTION_400x300:
@@ -42,10 +46,14 @@ int16_t dvhstx_height(DVHSTXResolution r) {
     return 225;
   case DVHSTX_RESOLUTION_320x240:
     return 240;
+  case DVHSTX_RESOLUTION_640x480:
+    return 480;
   case DVHSTX_RESOLUTION_360x240:
     return 240;
   case DVHSTX_RESOLUTION_360x200:
     return 200;
+  case DVHSTX_RESOLUTION_720x400:
+    return 400;
   case DVHSTX_RESOLUTION_360x288:
     return 288;
   case DVHSTX_RESOLUTION_400x300:

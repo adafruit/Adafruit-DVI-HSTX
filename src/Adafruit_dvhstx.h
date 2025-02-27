@@ -27,10 +27,16 @@ struct enum {
 
         DVHSTX_RESOLUTION_320x240, ///< well supported, aspect ratio 4:3, actual
                                    ///< resolution 640x480@60Hz
+        DVHSTX_RESOLUTION_640x480, ///< well supported, aspect ratio 4:3, actual
+                                   ///< resolution 640x480@60Hz
         DVHSTX_RESOLUTION_360x240, ///< well supported, aspect ratio 3:2, actual
                                    ///< resolution 720x480@60Hz
         DVHSTX_RESOLUTION_360x200, ///< well supported, aspect ratio 9:5, actual
-                                   ///< resolution 720x400@70Hz
+                                   ///< resolution 720x400@70Hz (very close to
+                                   ///< 16:9)
+        DVHSTX_RESOLUTION_720x400, ///< well supported, aspect ratio 9:5, actual
+                                   ///< resolution 720x400@70Hz (very close to
+                                   ///< 16:9)
         DVHSTX_RESOLUTION_360x288, ///< well supported, aspect ratio 5:4, actual
                                    ///< resolution 720x576@60Hz
         DVHSTX_RESOLUTION_400x300, ///< well supported, aspect ratio 4:3, actual

@@ -283,6 +283,7 @@ public:
   /*!
      @brief    Instatiate a DVHSTX 8-bit canvas context for graphics
      @param    pinout Details of the HSTX pinout
+     @param    double_buffered Whether to allocate two buffers
   */
   /**************************************************************************/
   DVHSTXText(DVHSTXPinout pinout, bool double_buffered = false)

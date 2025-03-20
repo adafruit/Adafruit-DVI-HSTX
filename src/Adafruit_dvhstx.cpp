@@ -74,6 +74,7 @@ void DVHSTX16::swap(bool copy_framebuffer) {
     memcpy(hstx.get_front_buffer<uint8_t>(), hstx.get_back_buffer<uint8_t>(),
            sizeof(uint16_t) * _width * _height);
   }
+  buffer = hstx.get_back_buffer<uint16_t>();
 }
 void DVHSTX8::swap(bool copy_framebuffer) {
   if (!double_buffered) {
@@ -84,6 +85,18 @@ void DVHSTX8::swap(bool copy_framebuffer) {
     memcpy(hstx.get_front_buffer<uint8_t>(), hstx.get_back_buffer<uint8_t>(),
            sizeof(uint8_t) * _width * _height);
   }
+  buffer = hstx.get_back_buffer<uint8_t>();
+}
+void DVHSTXText::swap(bool copy_framebuffer) {
+  if (!double_buffered) {
+    return;
+  }
+  hstx.flip_blocking();
+  if (copy_framebuffer) {
+    memcpy(hstx.get_front_buffer<uint8_t>(), hstx.get_back_buffer<uint8_t>(),
+           sizeof(uint16_t) * _width * _height);
+  }
+  buffer = hstx.get_back_buffer<uint16_t>();
 }
 
 void DVHSTXText::clear() {

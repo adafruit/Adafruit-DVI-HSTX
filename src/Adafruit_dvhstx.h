@@ -285,8 +285,8 @@ public:
      @param    pinout Details of the HSTX pinout
   */
   /**************************************************************************/
-  DVHSTXText(DVHSTXPinout pinout)
-      : GFXcanvas16(91, 30, false), pinout(pinout), res{},
+  DVHSTXText(DVHSTXPinout pinout, bool double_buffered=false)
+      : GFXcanvas16(91, 30, false), double_buffered{double_buffered}, pinout(pinout), res{},
         attr{TextColor::TEXT_WHITE} {}
   ~DVHSTXText() { end(); }
 
@@ -306,7 +306,7 @@ public:
   /**************************************************************************/
   bool begin() {
     bool result =
-        hstx.init(91, 30, pimoroni::DVHSTX::MODE_TEXT_RGB111, false, pinout);
+        hstx.init(91, 30, pimoroni::DVHSTX::MODE_TEXT_RGB111, double_buffered, pinout);
     if (!result)
       return false;
     buffer = hstx.get_back_buffer<uint16_t>();
@@ -427,6 +427,16 @@ public:
   */
   /**************************************************************************/
   int getCursorY() const { return cursor_y; }
+
+  /**********************************************************************/
+  /*!
+    @brief    If double-buffered, wait for retrace and swap buffers. Otherwise,
+    do nothing (returns immediately)
+    @param copy_framebuffer if true, copy the new screen to the new back buffer.
+    Otherwise, the content is undefined.
+  */
+  /**********************************************************************/
+  void swap(bool copy_framebuffer = false);
 
 private:
   DVHSTXPinout pinout;

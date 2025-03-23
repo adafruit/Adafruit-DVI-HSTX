@@ -84,9 +84,9 @@ Classes</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:a2b0681afbca276e5f57d7dfdb50fb8fe"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_d_v_h_s_t_x_text.html#a2b0681afbca276e5f57d7dfdb50fb8fe">DVHSTXText</a> (DVHSTXPinout pinout)</td></tr>
-<tr class="memdesc:a2b0681afbca276e5f57d7dfdb50fb8fe"><td class="mdescLeft">&#160;</td><td class="mdescRight">Instatiate a DVHSTX 8-bit canvas context for graphics.  <a href="#a2b0681afbca276e5f57d7dfdb50fb8fe">More...</a><br /></td></tr>
-<tr class="separator:a2b0681afbca276e5f57d7dfdb50fb8fe"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a40a22ef2bd4d8064e11b7cefc6825eff"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_d_v_h_s_t_x_text.html#a40a22ef2bd4d8064e11b7cefc6825eff">DVHSTXText</a> (DVHSTXPinout pinout, bool double_buffered=false)</td></tr>
+<tr class="memdesc:a40a22ef2bd4d8064e11b7cefc6825eff"><td class="mdescLeft">&#160;</td><td class="mdescRight">Instatiate a DVHSTX 8-bit canvas context for graphics.  <a href="#a40a22ef2bd4d8064e11b7cefc6825eff">More...</a><br /></td></tr>
+<tr class="separator:a40a22ef2bd4d8064e11b7cefc6825eff"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a51ebc1e7e2ee80bc582fb5eb59fee919"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_d_v_h_s_t_x_text.html#a51ebc1e7e2ee80bc582fb5eb59fee919">operator bool</a> () const</td></tr>
 <tr class="memdesc:a51ebc1e7e2ee80bc582fb5eb59fee919"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check if the display is running.  <a href="#a51ebc1e7e2ee80bc582fb5eb59fee919">More...</a><br /></td></tr>
 <tr class="separator:a51ebc1e7e2ee80bc582fb5eb59fee919"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -127,13 +127,16 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 <tr class="memitem:a2c78117a020d873188fae5ec2b827391"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_d_v_h_s_t_x_text.html#a2c78117a020d873188fae5ec2b827391">getCursorY</a> () const</td></tr>
 <tr class="memdesc:a2c78117a020d873188fae5ec2b827391"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the current cursor Y position, from 0 to 29.  <a href="#a2c78117a020d873188fae5ec2b827391">More...</a><br /></td></tr>
 <tr class="separator:a2c78117a020d873188fae5ec2b827391"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aecedd693e07aee999bdb0694b0c10517"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_d_v_h_s_t_x_text.html#aecedd693e07aee999bdb0694b0c10517">swap</a> (bool copy_framebuffer=false)</td></tr>
+<tr class="memdesc:aecedd693e07aee999bdb0694b0c10517"><td class="mdescLeft">&#160;</td><td class="mdescRight">If double-buffered, wait for retrace and swap buffers. Otherwise, do nothing (returns immediately)  <a href="#aecedd693e07aee999bdb0694b0c10517">More...</a><br /></td></tr>
+<tr class="separator:aecedd693e07aee999bdb0694b0c10517"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>A text-mode canvas displaying to a DVI monitor</p>
 <p>The text mode display is always 91x30 characters at a resolution of 1280x720 pixels. </p>
 </div><h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
-<a id="a2b0681afbca276e5f57d7dfdb50fb8fe"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a2b0681afbca276e5f57d7dfdb50fb8fe">&#9670;&nbsp;</a></span>DVHSTXText()</h2>
+<a id="a40a22ef2bd4d8064e11b7cefc6825eff"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a40a22ef2bd4d8064e11b7cefc6825eff">&#9670;&nbsp;</a></span>DVHSTXText()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -145,8 +148,18 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
           <td class="memname">DVHSTXText::DVHSTXText </td>
           <td>(</td>
           <td class="paramtype">DVHSTXPinout&#160;</td>
-          <td class="paramname"><em>pinout</em></td><td>)</td>
+          <td class="paramname"><em>pinout</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">bool&#160;</td>
+          <td class="paramname"><em>double_buffered</em> = <code>false</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
         </tr>
       </table>
   </td>
@@ -160,6 +173,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">pinout</td><td>Details of the HSTX pinout </td></tr>
+    <tr><td class="paramname">double_buffered</td><td>Whether to allocate two buffers </td></tr>
   </table>
   </dd>
 </dl>
@@ -438,6 +452,32 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 
 <p>Get the current cursor Y position, from 0 to 29. </p>
 <dl class="section return"><dt>Returns</dt><dd>The row position of the cursor </dd></dl>
+
+</div>
+</div>
+<a id="aecedd693e07aee999bdb0694b0c10517"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aecedd693e07aee999bdb0694b0c10517">&#9670;&nbsp;</a></span>swap()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void DVHSTXText::swap </td>
+          <td>(</td>
+          <td class="paramtype">bool&#160;</td>
+          <td class="paramname"><em>copy_framebuffer</em> = <code>false</code></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>If double-buffered, wait for retrace and swap buffers. Otherwise, do nothing (returns immediately) </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">copy_framebuffer</td><td>if true, copy the new screen to the new back buffer. Otherwise, the content is undefined. </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>

@@ -16,5 +16,5 @@ var searchData=
   ['dvhstx_5fresolution_5f640x480',['DVHSTX_RESOLUTION_640x480',['../structenum.html#ad4df4a61124c2008d155581b52c3141ead091c3e0876ac7dbe26cb1b7740ef2d1',1,'enum']]],
   ['dvhstx_5fresolution_5f720x400',['DVHSTX_RESOLUTION_720x400',['../structenum.html#ad4df4a61124c2008d155581b52c3141ea23af33757c0b5e7e0ab51dd9fb50285f',1,'enum']]],
   ['dvhstxresolution',['DVHSTXResolution',['../structenum.html#ad4df4a61124c2008d155581b52c3141e',1,'enum']]],
-  ['dvhstxtext',['DVHSTXText',['../class_d_v_h_s_t_x_text.html',1,'DVHSTXText'],['../class_d_v_h_s_t_x_text.html#a2b0681afbca276e5f57d7dfdb50fb8fe',1,'DVHSTXText::DVHSTXText()']]]
+  ['dvhstxtext',['DVHSTXText',['../class_d_v_h_s_t_x_text.html',1,'DVHSTXText'],['../class_d_v_h_s_t_x_text.html#a40a22ef2bd4d8064e11b7cefc6825eff',1,'DVHSTXText::DVHSTXText()']]]
 ];

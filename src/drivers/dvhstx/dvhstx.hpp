@@ -126,7 +126,6 @@ namespace pimoroni {
 
     private:
       RGB888 palette[PALETTE_SIZE];
-      bool double_buffered;
       uint8_t* frame_buffer_display;
       uint8_t* frame_buffer_back;
       uint32_t* font_cache = nullptr;

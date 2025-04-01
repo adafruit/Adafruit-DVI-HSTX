@@ -408,31 +408,31 @@ extern "C" void __no_inline_not_in_flash_func(display_setup_clock_preinit)() {
     clock_stop(clk_peri);
     clock_stop(clk_hstx);
 
-    // Set USB PLL to 528MHz
-    pll_init(pll_usb, PLL_COMMON_REFDIV, 1584 * MHZ, 3, 1);
+    // Set USB PLL to 480MHz
+    pll_init(pll_usb, PLL_COMMON_REFDIV, 1440 * MHZ, 3, 1);
 
-    const uint32_t usb_pll_freq = 528 * MHZ;
+    const uint32_t usb_pll_freq = 480 * MHZ;
 
-    // CLK SYS = PLL USB 528MHz / 2 = 264MHz
+    // CLK SYS = PLL USB 480MHz / 2 = 240MHz
     clock_configure(clk_sys,
                     CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
                     CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB,
                     usb_pll_freq, usb_pll_freq / 2);
 
-    // CLK PERI = PLL USB 528MHz / 4 = 132MHz
+    // CLK PERI = PLL USB 480MHz / 4 = 120MHz
     clock_configure(clk_peri,
                     0, // Only AUX mux on ADC
                     CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB,
                     usb_pll_freq, usb_pll_freq / 4);
 
-    // CLK USB = PLL USB 528MHz / 11 = 48MHz
+    // CLK USB = PLL USB 480MHz / 10 = 48MHz
     clock_configure(clk_usb,
                     0, // No GLMUX
                     CLOCKS_CLK_USB_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB,
                     usb_pll_freq,
                     USB_CLK_KHZ * KHZ);
 
-    // CLK ADC = PLL USB 528MHz / 11 = 48MHz
+    // CLK ADC = PLL USB 480MHz / 10 = 48MHz
     clock_configure(clk_adc,
                     0, // No GLMUX
                     CLOCKS_CLK_ADC_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB,

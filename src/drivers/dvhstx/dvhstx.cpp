@@ -369,7 +369,7 @@ void __scratch_x("display") DVHSTX::text_dma_handler() {
 
 #ifndef MICROPY_BUILD_TYPE
 	// flash issue with Pico 2 and Pico 2W, ignore it
-	#if !defined(ARDUINO_RASPBERRY_PI_PICO_2) && !defined(RASPBERRY_PI_PICO_2W)
+	#if !defined(ARDUINO_RASPBERRY_PI_PICO_2) && !defined(ARDUINO_RASPBERRY_PI_PICO_2W)
 		static void __no_inline_not_in_flash_func(set_qmi_timing)() {
 			// Make sure flash is deselected - QMI doesn't appear to have a busy flag(!)
 			while ((ioqspi_hw->io[1].status & IO_QSPI_GPIO_QSPI_SS_STATUS_OUTTOPAD_BITS) != IO_QSPI_GPIO_QSPI_SS_STATUS_OUTTOPAD_BITS)

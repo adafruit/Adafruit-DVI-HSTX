@@ -368,18 +368,22 @@ void __scratch_x("display") DVHSTX::text_dma_handler() {
 // Experimental clock config
 
 #ifndef MICROPY_BUILD_TYPE
-static void __no_inline_not_in_flash_func(set_qmi_timing)() {
-    // Make sure flash is deselected - QMI doesn't appear to have a busy flag(!)
-    while ((ioqspi_hw->io[1].status & IO_QSPI_GPIO_QSPI_SS_STATUS_OUTTOPAD_BITS) != IO_QSPI_GPIO_QSPI_SS_STATUS_OUTTOPAD_BITS)
-        ;
+	// flash issue with Pico 2 and Pico 2W, ignore it
+	#if !defined(ARDUINO_RASPBERRY_PI_PICO_2) && !defined(RASPBERRY_PI_PICO_2W)
+		static void __no_inline_not_in_flash_func(set_qmi_timing)() {
+			// Make sure flash is deselected - QMI doesn't appear to have a busy flag(!)
+			while ((ioqspi_hw->io[1].status & IO_QSPI_GPIO_QSPI_SS_STATUS_OUTTOPAD_BITS) != IO_QSPI_GPIO_QSPI_SS_STATUS_OUTTOPAD_BITS)
+				;
 
-    qmi_hw->m[0].timing = 0x40000202;
-    //qmi_hw->m[0].timing = 0x40000101;
-    // Force a read through XIP to ensure the timing is applied
-    volatile uint32_t* ptr = (volatile uint32_t*)0x14000000;
-    (void) *ptr;
-}
+			qmi_hw->m[0].timing = 0x40000202;
+			//qmi_hw->m[0].timing = 0x40000101;
+			// Force a read through XIP to ensure the timing is applied
+			volatile uint32_t* ptr = (volatile uint32_t*)0x14000000;
+			(void) *ptr;
+		}
+	#endif
 #endif
+
 
 extern "C" void __no_inline_not_in_flash_func(display_setup_clock_preinit)() {
     uint32_t intr_stash = save_and_disable_interrupts();
@@ -442,7 +446,10 @@ extern "C" void __no_inline_not_in_flash_func(display_setup_clock_preinit)() {
     // Now we are running fast set fast QSPI clock and read delay
     // On MicroPython this is setup by main.
 #ifndef MICROPY_BUILD_TYPE
-    set_qmi_timing();
+    // issue with QMI timing on Pico 2 and Pico 2W, ignore it
+    #if !defined(ARDUINO_RASPBERRY_PI_PICO_2) && !defined(RASPBERRY_PI_PICO_2W)
+		set_qmi_timing();
+    #endif
 #endif
 
     restore_interrupts(intr_stash);

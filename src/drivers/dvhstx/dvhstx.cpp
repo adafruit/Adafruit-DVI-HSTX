@@ -447,7 +447,7 @@ extern "C" void __no_inline_not_in_flash_func(display_setup_clock_preinit)() {
     // On MicroPython this is setup by main.
 #ifndef MICROPY_BUILD_TYPE
     // issue with QMI timing on Pico 2 and Pico 2W, ignore it
-    #if !defined(ARDUINO_RASPBERRY_PI_PICO_2) && !defined(RASPBERRY_PI_PICO_2W)
+    #if !defined(ARDUINO_RASPBERRY_PI_PICO_2) && !defined(ARDUINO_RASPBERRY_PI_PICO_2W)
 		set_qmi_timing();
     #endif
 #endif

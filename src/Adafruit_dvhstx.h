@@ -97,6 +97,12 @@ using pimoroni::DVHSTXPinout;
   { 12, 14, 16, 18 }
 #endif
 
+// Other common HSTX pin configurations
+#define ADAFRUIT_HSTXDVIBELL_CFG   {14, 12, 18, 16}
+#define ADAFRUIT_METRO_RP2350_CFG  {14, 18, 16, 12}
+#define ADAFRUIT_FEATHER_RP2350_CFG {14, 18, 16, 12}
+#define ADAFRUIT_FRUIT_JAM_CFG     {13, 15, 17, 19}
+
 int16_t dvhstx_width(DVHSTXResolution r);
 int16_t dvhstx_height(DVHSTXResolution r);
 

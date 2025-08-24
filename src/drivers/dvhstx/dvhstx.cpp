@@ -656,6 +656,14 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
 #else
     frame_buffer_display = (uint8_t*)malloc(frame_width * frame_height * frame_bytes_per_pixel);
     frame_buffer_back = double_buffered ? (uint8_t*)malloc(frame_width * frame_height * frame_bytes_per_pixel) : frame_buffer_display;
+    if(frame_buffer_display == nullptr || frame_buffer_back == nullptr) {
+        dvhstx_debug("Out of memory for frame buffers\n");
+        if (frame_buffer_display) {
+            free(frame_buffer_display);
+            frame_buffer_display = nullptr;
+        }
+        return false;
+    }
 #endif
     memset(frame_buffer_display, 0, frame_width * frame_height * frame_bytes_per_pixel);
     memset(frame_buffer_back, 0, frame_width * frame_height * frame_bytes_per_pixel);

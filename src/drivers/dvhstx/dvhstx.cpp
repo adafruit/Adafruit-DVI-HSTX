@@ -496,6 +496,13 @@ DVHSTX::DVHSTX()
     dma_claim_mask((1 << NUM_CHANS) - 1);
 }
 
+DVHSTX::~DVHSTX()
+{
+    reset();
+    for (int i = 0; i < NUM_CHANS; ++i)
+        dma_channel_unclaim(i);
+}
+
 bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffered, const DVHSTXPinout &pinout)
 {
     if (inited) reset();
@@ -896,6 +903,9 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
 void DVHSTX::reset() {
     if (!inited) return;
     inited = false;
+
+    if (display == this)
+        display = nullptr;
 
     hstx_ctrl_hw->csr = 0;
 

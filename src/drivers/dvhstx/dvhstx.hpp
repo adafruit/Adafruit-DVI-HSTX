@@ -83,6 +83,7 @@ namespace pimoroni {
 
   public:
     DVHSTX();
+    ~DVHSTX();
 
     //--------------------------------------------------
     // Methods

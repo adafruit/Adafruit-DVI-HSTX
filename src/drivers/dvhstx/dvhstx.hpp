@@ -134,7 +134,7 @@ namespace pimoroni {
 
       // Send audio at this rate (32000, 44100 or 48000 Hz) from the next
       // init(); 0 sends video only, the default. Audio puts data islands in
-      // the blanking, which sinks without HDMI support may not accept.
+      // the blanking, which displays that take only plain DVI may not accept.
       // Defined in dvhstx_audio.cpp, which is only linked if this is called.
       void enable_audio(uint32_t sample_rate);
       bool get_audio_enabled() const { return audio_on; }

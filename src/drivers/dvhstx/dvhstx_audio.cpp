@@ -5,7 +5,7 @@
 // audio (DVHSTX::enable_audio), so video-only sketches keep their RAM: the
 // pico_hdmi packet queue alone is 36 KB.
 //
-// With audio on, every line carries a data island (HDMI 1.3a section 5.2.3):
+// With audio on, every line carries a data island, as pico_hdmi sends them:
 // an audio sample packet when one is due, otherwise a null packet. Blanking
 // lines also carry the AVI InfoFrame, the audio InfoFrame and the audio clock
 // regeneration (ACR) packets. Active lines get a video preamble and guard
@@ -132,7 +132,7 @@ static uint build_di_line(uint32_t* buf, const struct dvi_timing* t, const uint3
     return p - buf;
 }
 
-// ACR N values from HDMI 1.3a table 7-1; CTS follows from the pixel clock.
+// ACR N values as pico_hdmi uses them; CTS follows from the pixel clock.
 static uint32_t acr_n(uint32_t sample_rate) {
     switch (sample_rate) {
     case 32000: return 4096;

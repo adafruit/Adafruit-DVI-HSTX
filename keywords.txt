@@ -6,10 +6,21 @@
 # Datatypes (KEYWORD1)
 #######################################
 
+DVHSTX16	KEYWORD1
+DVHSTX8	KEYWORD1
+DVHSTXText	KEYWORD1
+DVHSTXScanline	KEYWORD1
+
 
 #######################################
 # Methods and Functions (KEYWORD2)
 #######################################
+
+enableAudio	KEYWORD2
+audioWrite	KEYWORD2
+audioAvailableForWrite	KEYWORD2
+audioUnderruns	KEYWORD2
+getFrameCount	KEYWORD2
 
 
 #######################################

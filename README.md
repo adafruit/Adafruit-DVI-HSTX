@@ -2,7 +2,7 @@
 
 This repository is home to the Adafruit GFX compatible DVI driver for RP2 chips with HSTX (e.g. Adafruit Metro RP2350, Adafruit Fruit Jam).
 
-**Important note on overclocking:** This library overclocks your RP2 chip to 264MHz. Simply including the `<Adafruit_dvhstx.h>` header enables this overclocking, separate from the option in the Arduino Tools menu.
+**Important note on overclocking:** This library overclocks your RP2 chip to 240MHz. Simply including the `<Adafruit_dvhstx.h>` header enables this overclocking, separate from the option in the Arduino Tools menu.
 Just like PC overclocking, there’s some risk of reduced component lifespan, though the extent (if any) can’t be precisely quantified and could vary from one chip to another.
 Proceed at your own discretion.
 

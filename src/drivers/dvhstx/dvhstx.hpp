@@ -121,6 +121,12 @@ namespace pimoroni {
       void gfx_dma_handler();
       void text_dma_handler();
 
+      // Send audio at this rate (32000, 44100 or 48000 Hz) from the next
+      // init(); 0, the default, sends video only. Audio puts data islands in
+      // the blanking, which sinks without HDMI support may not accept.
+      void set_audio_sample_rate(uint32_t rate) { audio_sample_rate = rate; }
+      bool get_audio_enabled() const { return audio_on; }
+
       // Frames sent since init(); wraps after about 2 years at 60 Hz.
       uint32_t get_frame_count() const { return frame_count; }
 
@@ -134,6 +140,10 @@ namespace pimoroni {
       uint32_t* font_cache = nullptr;
 
       void display_setup_clock();
+      void setup_audio(bool text);
+
+      uint32_t audio_sample_rate = 0;
+      bool audio_on = false;
 
       // DMA scanline filling
       uint ch_num = 0;

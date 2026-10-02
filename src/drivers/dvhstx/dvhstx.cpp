@@ -27,6 +27,12 @@ extern "C" {
 #include "dvi.hpp"
 #include "dvhstx.hpp"
 
+extern "C" {
+#include "audio_config.h"
+#include "pico_hdmi/hstx_packet.h"
+#include "pico_hdmi/hstx_data_island_queue.h"
+}
+
 using namespace pimoroni;
 
 #ifdef MICROPY_BUILD_TYPE
@@ -131,6 +137,149 @@ static uint32_t vactive_text_line_header[count_of(vactive_text_line_header_src)]
 #define NUM_FRAME_LINES 2
 #define NUM_CHANS 3
 
+// ----------------------------------------------------------------------------
+// Audio: data islands
+//
+// With audio on, every line carries a data island (HDMI 1.3a section 5.2.3):
+// an audio sample packet when one is due, otherwise a null packet. Blanking
+// lines also carry the AVI InfoFrame, the audio InfoFrame and the audio clock
+// regeneration (ACR) packets. Active lines get a video preamble and guard
+// band before the pixels, which sinks expect once they see data islands.
+// Layout follows pico_hdmi's build_line_with_di(): the island sits inside the
+// hsync pulse when it fits, otherwise in the back porch after it.
+
+// Control symbols for active-low sync, lanes 1 and 2 as preambles need them.
+#define PREAMBLE_V0_H0 (TMDS_CTRL_00 | (TMDS_CTRL_01 << 10) | (TMDS_CTRL_01 << 20))
+#define PREAMBLE_V1_H0 (TMDS_CTRL_10 | (TMDS_CTRL_01 << 10) | (TMDS_CTRL_01 << 20))
+#define PREAMBLE_V0_H1 (TMDS_CTRL_01 | (TMDS_CTRL_01 << 10) | (TMDS_CTRL_01 << 20))
+#define PREAMBLE_V1_H1 (TMDS_CTRL_11 | (TMDS_CTRL_01 << 10) | (TMDS_CTRL_01 << 20))
+#define VIDEO_PREAMBLE_V1_H1 (TMDS_CTRL_11 | (TMDS_CTRL_01 << 10) | (TMDS_CTRL_00 << 20))
+#define VIDEO_GUARD_BAND (0x2ccu | (0x133u << 10) | (0x2ccu << 20))
+#define W_VIDEO_PREAMBLE 8
+#define W_VIDEO_GUARD_BAND 2
+
+#define DI_LINE_MAX_WORDS 64
+
+static uint32_t di_acr_vsync_on[DI_LINE_MAX_WORDS], di_acr_vsync_off[DI_LINE_MAX_WORDS];
+static uint32_t di_infoframe_vsync_on[DI_LINE_MAX_WORDS], di_avi_infoframe[DI_LINE_MAX_WORDS];
+static uint di_acr_vsync_on_len, di_acr_vsync_off_len, di_infoframe_vsync_on_len, di_avi_infoframe_len;
+// One blanking line per DMA channel, so the island can be patched in while
+// the other channels are still sending.
+static uint32_t di_blank[NUM_CHANS][DI_LINE_MAX_WORDS];
+static uint di_blank_len;
+static uint32_t di_active_header[DI_LINE_MAX_WORDS];
+// Offset of the 36 island words in every line built by build_di_line().
+static uint di_offset;
+static const uint32_t* di_null;
+// Header words before the pixels of each active line.
+static uint line_header_words;
+
+static bool di_fits(const struct dvi_timing* t) {
+    return t->h_sync_width >= W_PREAMBLE + W_DATA_ISLAND ||
+           t->h_back_porch >= W_PREAMBLE + W_DATA_ISLAND + W_VIDEO_PREAMBLE + W_VIDEO_GUARD_BAND;
+}
+
+// Build one line with a data island. text adds the 6 black pixels the text
+// mode header sends before its TMDS data. Returns the length in words.
+static uint build_di_line(uint32_t* buf, const struct dvi_timing* t, const uint32_t* di,
+                          bool vsync, bool active, bool text) {
+    uint32_t* p = buf;
+    const uint32_t sync_h0 = vsync ? SYNC_V0_H0 : SYNC_V1_H0;
+    const uint32_t sync_h1 = vsync ? SYNC_V0_H1 : SYNC_V1_H1;
+    const bool in_hsync = t->h_sync_width >= W_PREAMBLE + W_DATA_ISLAND;
+    int back_porch = t->h_back_porch;
+
+    *p++ = HSTX_CMD_RAW_REPEAT | t->h_front_porch;
+    *p++ = sync_h1;
+    if (in_hsync) {
+        *p++ = HSTX_CMD_RAW_REPEAT | W_PREAMBLE;
+        *p++ = vsync ? PREAMBLE_V0_H0 : PREAMBLE_V1_H0;
+    } else {
+        *p++ = HSTX_CMD_RAW_REPEAT | t->h_sync_width;
+        *p++ = sync_h0;
+        *p++ = HSTX_CMD_RAW_REPEAT | W_PREAMBLE;
+        *p++ = vsync ? PREAMBLE_V0_H1 : PREAMBLE_V1_H1;
+    }
+    di_offset = p + 1 - buf;
+    *p++ = HSTX_CMD_RAW | W_DATA_ISLAND;
+    for (int i = 0; i < W_DATA_ISLAND; i++)
+        *p++ = di[i];
+    if (in_hsync) {
+        const int rest = t->h_sync_width - W_PREAMBLE - W_DATA_ISLAND;
+        if (rest) {
+            *p++ = HSTX_CMD_RAW_REPEAT | rest;
+            *p++ = sync_h0;
+        }
+    } else {
+        back_porch -= W_PREAMBLE + W_DATA_ISLAND;
+    }
+
+    if (active) {
+        *p++ = HSTX_CMD_RAW_REPEAT | (back_porch - W_VIDEO_PREAMBLE - W_VIDEO_GUARD_BAND);
+        *p++ = sync_h1;
+        *p++ = HSTX_CMD_RAW_REPEAT | W_VIDEO_PREAMBLE;
+        *p++ = VIDEO_PREAMBLE_V1_H1;
+        *p++ = HSTX_CMD_RAW_REPEAT | W_VIDEO_GUARD_BAND;
+        *p++ = VIDEO_GUARD_BAND;
+        if (text) {
+            *p++ = HSTX_CMD_RAW | 6;
+            for (int i = 0; i < 3; i++) {
+                *p++ = BLACK_PIXEL_A;
+                *p++ = BLACK_PIXEL_B;
+            }
+            *p++ = HSTX_CMD_TMDS | (t->h_active_pixels - 6);
+        } else {
+            *p++ = HSTX_CMD_TMDS | t->h_active_pixels;
+        }
+    } else {
+        *p++ = HSTX_CMD_RAW_REPEAT | (back_porch + t->h_active_pixels);
+        *p++ = sync_h1;
+    }
+    return p - buf;
+}
+
+// ACR N values from HDMI 1.3a table 7-1; CTS follows from the pixel clock.
+static uint32_t acr_n(uint32_t sample_rate) {
+    switch (sample_rate) {
+    case 32000: return 4096;
+    case 44100: return 6272;
+    case 88200: return 12544;
+    case 96000: return 12288;
+    default: return 6144;
+    }
+}
+
+// In main RAM, not scratch: scratch X also holds core 1's stack and is full.
+static void __not_in_flash_func(copy_di)(uint32_t* dst, const uint32_t* di) {
+    for (int i = 0; i < W_DATA_ISLAND; i++)
+        dst[i] = di[i];
+}
+
+// Point ch at the next blanking line when audio is on.
+static void __no_inline_not_in_flash_func(audio_blank_line)(dma_channel_hw_t* ch, uint ch_num, int v_scanline,
+                                                            const struct dvi_timing* t, bool vsync) {
+    if (vsync) {
+        if (v_scanline == t->v_front_porch) {
+            ch->read_addr = (uintptr_t)di_acr_vsync_on;
+            ch->transfer_count = di_acr_vsync_on_len;
+        } else {
+            ch->read_addr = (uintptr_t)di_infoframe_vsync_on;
+            ch->transfer_count = di_infoframe_vsync_on_len;
+        }
+    } else if (v_scanline == 0) {
+        ch->read_addr = (uintptr_t)di_avi_infoframe;
+        ch->transfer_count = di_avi_infoframe_len;
+    } else if (v_scanline >= t->v_front_porch + t->v_sync_width && (v_scanline & 3) == 0) {
+        ch->read_addr = (uintptr_t)di_acr_vsync_off;
+        ch->transfer_count = di_acr_vsync_off_len;
+    } else {
+        const uint32_t* di = hstx_di_queue_get_audio_packet();
+        copy_di(&di_blank[ch_num][di_offset], di ? di : di_null);
+        ch->read_addr = (uintptr_t)di_blank[ch_num];
+        ch->transfer_count = di_blank_len;
+    }
+}
+
 static DVHSTX* display = nullptr;
 
 // ----------------------------------------------------------------------------
@@ -147,7 +296,12 @@ void __scratch_x("display") DVHSTX::gfx_dma_handler() {
     dma_hw->intr = 1u << ch_num;
     if (++ch_num == NUM_CHANS) ch_num = 0;
 
-    if (v_scanline >= timing_mode->v_front_porch && v_scanline < (timing_mode->v_front_porch + timing_mode->v_sync_width)) {
+    if (audio_on) hstx_di_queue_tick();
+
+    const bool vsync = v_scanline >= timing_mode->v_front_porch && v_scanline < (timing_mode->v_front_porch + timing_mode->v_sync_width);
+    if (v_scanline < v_inactive_total && audio_on) {
+        audio_blank_line(ch, ch_num, v_scanline, timing_mode, vsync);
+    } else if (vsync) {
         ch->read_addr = (uintptr_t)vblank_line_vsync_on;
         ch->transfer_count = count_of(vblank_line_vsync_on);
     } else if (v_scanline < v_inactive_total) {
@@ -155,17 +309,24 @@ void __scratch_x("display") DVHSTX::gfx_dma_handler() {
         ch->transfer_count = count_of(vblank_line_vsync_off);
     } else {
         const int y = (v_scanline - v_inactive_total) >> v_repeat_shift;
-        const int new_line_num = (v_repeat_shift == 0) ? ch_num : (y & (NUM_FRAME_LINES - 1));
-        const uint line_buf_total_len = ((timing_mode->h_active_pixels * line_bytes_per_pixel) >> 2) + count_of(vactive_line_header);
+        // With audio each line has its own island, so repeated lines can't
+        // share a buffer: use one per channel and redraw the pixels.
+        const int new_line_num = (v_repeat_shift == 0 || audio_on) ? ch_num : (y & (NUM_FRAME_LINES - 1));
+        const uint line_buf_total_len = ((timing_mode->h_active_pixels * line_bytes_per_pixel) >> 2) + line_header_words;
 
         ch->read_addr = (uintptr_t)&line_buffers[new_line_num * line_buf_total_len];
         ch->transfer_count = line_buf_total_len;
+
+        if (audio_on) {
+            const uint32_t* di = hstx_di_queue_get_audio_packet();
+            copy_di(&line_buffers[new_line_num * line_buf_total_len + di_offset], di ? di : di_null);
+        }
 
         // Fill line buffer
         if (line_num != new_line_num)
         {
             line_num = new_line_num;
-            uint32_t* dst_ptr = &line_buffers[line_num * line_buf_total_len + count_of(vactive_line_header)];
+            uint32_t* dst_ptr = &line_buffers[line_num * line_buf_total_len + line_header_words];
 
             if (line_bytes_per_pixel == 2) {
                 uint16_t* src_ptr = (uint16_t*)&frame_buffer_display[y * 2 * (timing_mode->h_active_pixels >> h_repeat_shift)];
@@ -267,7 +428,12 @@ void __scratch_x("display") DVHSTX::text_dma_handler() {
     dma_hw->intr = 1u << ch_num;
     if (++ch_num == NUM_CHANS) ch_num = 0;
 
-    if (v_scanline >= timing_mode->v_front_porch && v_scanline < (timing_mode->v_front_porch + timing_mode->v_sync_width)) {
+    if (audio_on) hstx_di_queue_tick();
+
+    const bool vsync = v_scanline >= timing_mode->v_front_porch && v_scanline < (timing_mode->v_front_porch + timing_mode->v_sync_width);
+    if (v_scanline < v_inactive_total && audio_on) {
+        audio_blank_line(ch, ch_num, v_scanline, timing_mode, vsync);
+    } else if (vsync) {
         ch->read_addr = (uintptr_t)vblank_line_vsync_on;
         ch->transfer_count = count_of(vblank_line_vsync_on);
     } else if (v_scanline < v_inactive_total) {
@@ -275,15 +441,20 @@ void __scratch_x("display") DVHSTX::text_dma_handler() {
         ch->transfer_count = count_of(vblank_line_vsync_off);
     } else {
         const int y = (v_scanline - v_inactive_total);
-        const uint line_buf_total_len = (frame_width * line_bytes_per_pixel + 3) / 4 + count_of(vactive_text_line_header);
+        const uint line_buf_total_len = (frame_width * line_bytes_per_pixel + 3) / 4 + line_header_words;
 
         ch->read_addr = (uintptr_t)&line_buffers[ch_num * line_buf_total_len];
         ch->transfer_count = line_buf_total_len;
 
+        if (audio_on) {
+            const uint32_t* di = hstx_di_queue_get_audio_packet();
+            copy_di(&line_buffers[ch_num * line_buf_total_len + di_offset], di ? di : di_null);
+        }
+
         // Fill line buffer
         int char_y = y % 24;
         if (line_bytes_per_pixel == 4) {
-            uint32_t* dst_ptr = &line_buffers[ch_num * line_buf_total_len + count_of(vactive_text_line_header)];
+            uint32_t* dst_ptr = &line_buffers[ch_num * line_buf_total_len + line_header_words];
             uint8_t* src_ptr = &frame_buffer_display[(y / 24) * frame_width];
             for (int i = 0; i < frame_width; ++i) {
                 *dst_ptr++ = render_char_line(*src_ptr++, char_y);
@@ -291,7 +462,7 @@ void __scratch_x("display") DVHSTX::text_dma_handler() {
         }
         else {
             uint8_t* src_ptr = &frame_buffer_display[(y / 24) * frame_width * 2];
-            uint32_t* dst_ptr = &line_buffers[ch_num * line_buf_total_len + count_of(vactive_text_line_header)];
+            uint32_t* dst_ptr = &line_buffers[ch_num * line_buf_total_len + line_header_words];
             for (int i = 0; i < frame_width; i += 2) {
                 uint32_t tmp_h, tmp_l;
                 
@@ -336,7 +507,7 @@ void __scratch_x("display") DVHSTX::text_dma_handler() {
                 *dst_ptr++ = (tmp_l & 0xffff) | (tmp_h << 16);
             }
             if (y / 24 == cursor_y) {
-                uint8_t* dst_ptr = (uint8_t*)&line_buffers[ch_num * line_buf_total_len + count_of(vactive_text_line_header)] + 14 * cursor_x;
+                uint8_t* dst_ptr = (uint8_t*)&line_buffers[ch_num * line_buf_total_len + line_header_words] + 14 * cursor_x;
                 *dst_ptr++ ^= 0xff;
                 *dst_ptr++ ^= 0xff;
                 *dst_ptr++ ^= 0xff;
@@ -498,6 +669,54 @@ DVHSTX::DVHSTX()
     dma_claim_mask((1 << NUM_CHANS) - 1);
 }
 
+void DVHSTX::setup_audio(bool text) {
+    const struct dvi_timing* t = timing_mode;
+    const bool in_hsync = t->h_sync_width >= W_PREAMBLE + W_DATA_ISLAND;
+    const uint32_t h_total = t->h_front_porch + t->h_sync_width + t->h_back_porch + t->h_active_pixels;
+    // HSTX sends one pixel every 5 clk_hstx cycles (see csr below).
+    const uint32_t pixel_clock = clock_get_hz(clk_hstx) / 5;
+
+    hstx_di_queue_init();
+    hstx_di_queue_set_v_total(v_total_active_lines);
+    hstx_di_queue_set_hsync_active(in_hsync);
+    hstx_di_queue_set_sample_rate(audio_sample_rate);
+    // Pace packets from the real pixel clock, not a nominal 60 Hz.
+    const uint64_t pacing = ((uint64_t)audio_sample_rate * h_total) << 16;
+    const uint32_t spl_fp = pacing / pixel_clock;
+    hstx_di_queue_set_samples_per_line_exact(spl_fp, pacing - (uint64_t)spl_fp * pixel_clock, pixel_clock);
+
+    di_null = hstx_get_null_data_island(false, in_hsync);
+    di_blank_len = build_di_line(di_blank[0], t, di_null, false, false, text);
+    for (int i = 1; i < NUM_CHANS; i++)
+        memcpy(di_blank[i], di_blank[0], sizeof(di_blank[0]));
+
+    hstx_packet_t packet;
+    hstx_data_island_t island;
+
+    const uint32_t n = acr_n(audio_sample_rate);
+    const uint64_t div = 128ull * audio_sample_rate;
+    const uint32_t cts = ((uint64_t)pixel_clock * n + div / 2) / div;
+    hstx_packet_set_acr(&packet, n, cts);
+    hstx_encode_data_island(&island, &packet, true, in_hsync);
+    di_acr_vsync_on_len = build_di_line(di_acr_vsync_on, t, island.words, true, false, text);
+    hstx_encode_data_island(&island, &packet, false, in_hsync);
+    di_acr_vsync_off_len = build_di_line(di_acr_vsync_off, t, island.words, false, false, text);
+
+    hstx_packet_set_audio_infoframe(&packet, audio_sample_rate, 2, 16);
+    hstx_encode_data_island(&island, &packet, true, in_hsync);
+    di_infoframe_vsync_on_len = build_di_line(di_infoframe_vsync_on, t, island.words, true, false, text);
+
+    // CTA-861 VICs for the modes that match one exactly; 0 for the rest.
+    uint8_t vic = 0;
+    if (t == &dvi_timing_640x480p_60hz) vic = 1;
+    else if (t == &dvi_timing_720x480p_60hz) vic = 2;
+    else if (t == &dvi_timing_720x576p_50hz) vic = 17;
+    const bool wide = t->h_active_pixels * 9 >= t->v_active_lines * 16;
+    hstx_packet_set_avi_infoframe_aspect(&packet, vic, 0, wide);
+    hstx_encode_data_island(&island, &packet, false, in_hsync);
+    di_avi_infoframe_len = build_di_line(di_avi_infoframe, t, island.words, false, false, text);
+}
+
 bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffered, const DVHSTXPinout &pinout)
 {
     if (inited) reset();
@@ -623,6 +842,20 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
     vactive_text_line_header[4] |= timing_mode->h_back_porch;
     vactive_text_line_header[7+6] |= timing_mode->h_active_pixels - 6;
 
+    const bool is_text_mode = (mode == MODE_TEXT_MONO || mode == MODE_TEXT_RGB111);
+    const uint32_t* line_header = is_text_mode ? vactive_text_line_header : vactive_line_header;
+    line_header_words = is_text_mode ? count_of(vactive_text_line_header) : count_of(vactive_line_header);
+    audio_on = audio_sample_rate != 0;
+    if (audio_on) {
+        if (!di_fits(timing_mode)) {
+            dvhstx_debug("No room for audio in this mode\n");
+            return false;
+        }
+        setup_audio(is_text_mode);
+        line_header = di_active_header;
+        line_header_words = build_di_line(di_active_header, timing_mode, di_null, false, true, is_text_mode);
+    }
+
     switch (mode) {
     case MODE_RGB565:
         frame_bytes_per_pixel = 2;
@@ -668,16 +901,14 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
     frame_buffer_display = frame_buffer_display;
     dvhstx_debug("Frame buffers inited\n");
 
-    const bool is_text_mode = (mode == MODE_TEXT_MONO || mode == MODE_TEXT_RGB111);
     const int frame_pixel_words = (frame_width * h_repeat * line_bytes_per_pixel + 3) >> 2;
-    const int frame_line_words = frame_pixel_words + (is_text_mode ? count_of(vactive_text_line_header) : count_of(vactive_line_header));
-    const int frame_lines = (v_repeat == 1) ? NUM_CHANS : NUM_FRAME_LINES;
+    const int frame_line_words = frame_pixel_words + line_header_words;
+    const int frame_lines = (v_repeat == 1 || audio_on) ? NUM_CHANS : NUM_FRAME_LINES;
     line_buffers = (uint32_t*)malloc(frame_line_words * 4 * frame_lines);
 
     for (int i = 0; i < frame_lines; ++i)
     {
-        if (is_text_mode) memcpy(&line_buffers[i * frame_line_words], vactive_text_line_header, count_of(vactive_text_line_header) * sizeof(uint32_t));
-        else memcpy(&line_buffers[i * frame_line_words], vactive_line_header, count_of(vactive_line_header) * sizeof(uint32_t));
+        memcpy(&line_buffers[i * frame_line_words], line_header, line_header_words * sizeof(uint32_t));
     }
 
     if (mode == MODE_TEXT_RGB111) {

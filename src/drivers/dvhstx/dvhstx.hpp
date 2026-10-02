@@ -32,6 +32,10 @@ namespace pimoroni {
   class DVHSTX {
   public:
     static constexpr int PALETTE_SIZE = 256;
+    // With audio, graphics lines take two DMA transfers each and need one
+    // more channel in flight to keep up at 1024x768. The last channel is
+    // claimed only while audio runs.
+    static constexpr uint NUM_AUDIO_CHANS = 4;
 
 
     enum Mode {
@@ -120,11 +124,14 @@ namespace pimoroni {
       // DMA handlers, should not be called externally
       void gfx_dma_handler();
       void text_dma_handler();
+      void gfx_audio_dma_handler();
+      void text_audio_dma_handler();
 
       // Send audio at this rate (32000, 44100 or 48000 Hz) from the next
-      // init(); 0, the default, sends video only. Audio puts data islands in
+      // init(); 0 sends video only, the default. Audio puts data islands in
       // the blanking, which sinks without HDMI support may not accept.
-      void set_audio_sample_rate(uint32_t rate) { audio_sample_rate = rate; }
+      // Defined in dvhstx_audio.cpp, which is only linked if this is called.
+      void enable_audio(uint32_t sample_rate);
       bool get_audio_enabled() const { return audio_on; }
 
       // Frames sent since init(); wraps after about 2 years at 60 Hz.
@@ -140,10 +147,22 @@ namespace pimoroni {
       uint32_t* font_cache = nullptr;
 
       void display_setup_clock();
-      void setup_audio(bool text);
+      bool setup_audio(bool text, const uint32_t** header, uint* header_words);
+      void fill_gfx_line(uint32_t* dst_ptr, int y);
+      void fill_text_line(uint32_t* line, int y);
 
       uint32_t audio_sample_rate = 0;
       bool audio_on = false;
+      // Set by enable_audio(), so init() reaches the audio code only then.
+      bool (DVHSTX::*audio_setup)(bool, const uint32_t**, uint*) = nullptr;
+      void (*audio_irq)() = nullptr;
+      // DMA channels in the ring: 3, or NUM_AUDIO_CHANS with audio.
+      uint num_chans = 3;
+      bool audio_chan_claimed = false;
+      // Header words in front of the pixels of each line buffer.
+      uint line_header_words;
+      // Audio graphics lines: the header went out, the pixels are next.
+      bool pixels_pending = false;
 
       // DMA scanline filling
       uint ch_num = 0;

@@ -11,6 +11,10 @@ extern "C" {
 #define DVHSTX_AUDIO_QUEUE_TARGET 200
 #define DVHSTX_AUDIO_FRAMES_PER_PACKET 4
 
+void dvhstx_enable_audio(pimoroni::DVHSTX &hstx, uint32_t sample_rate) {
+  hstx.enable_audio(sample_rate);
+}
+
 size_t DVHSTXAudio::audioAvailableForWrite() {
   if (!_audio_running)
     return 0;

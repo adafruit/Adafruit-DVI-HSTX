@@ -107,6 +107,10 @@ using pimoroni::DVHSTXPinout;
 #define ADAFRUIT_FRUIT_JAM_CFG                                                 \
   { 13, 15, 17, 19 }
 
+// Switches audio on in the driver. Only referenced from enableAudio(), so the
+// audio code and its 36 KB queue are linked only into sketches that use it.
+void dvhstx_enable_audio(pimoroni::DVHSTX &hstx, uint32_t sample_rate);
+
 /// Audio over the DVI cable, shared by the display classes. Call
 /// enableAudio() before begin(), then keep the queue fed with audioWrite().
 /// Audio needs a display that plays sound from the cable; a plain DVI
@@ -119,7 +123,10 @@ public:
      @param    sample_rate 32000, 44100 or 48000 Hz
   */
   /**************************************************************************/
-  void enableAudio(uint32_t sample_rate = 48000) { _audio_rate = sample_rate; }
+  void enableAudio(uint32_t sample_rate = 48000) {
+    _audio_rate = sample_rate;
+    _audio_enable = dvhstx_enable_audio;
+  }
 
   /**************************************************************************/
   /*!
@@ -152,6 +159,8 @@ public:
 protected:
   /// Sample rate requested by enableAudio(), 0 for video only
   uint32_t _audio_rate = 0;
+  /// Set by enableAudio(); begin() calls it to pass the rate on
+  void (*_audio_enable)(pimoroni::DVHSTX &, uint32_t) = nullptr;
   /// True once begin() has started audio
   bool _audio_running = false;
   /// IEC 60958 frame counter carried between packets
@@ -185,7 +194,8 @@ public:
   */
   /**************************************************************************/
   bool begin() {
-    hstx.set_audio_sample_rate(_audio_rate);
+    if (_audio_enable)
+      _audio_enable(hstx, _audio_rate);
     _audio_frame = 0;
     bool result =
         hstx.init(dvhstx_width(res), dvhstx_height(res),
@@ -266,7 +276,8 @@ public:
   */
   /**************************************************************************/
   bool begin() {
-    hstx.set_audio_sample_rate(_audio_rate);
+    if (_audio_enable)
+      _audio_enable(hstx, _audio_rate);
     _audio_frame = 0;
     bool result =
         hstx.init(dvhstx_width(res), dvhstx_height(res),
@@ -389,7 +400,8 @@ public:
   */
   /**************************************************************************/
   bool begin() {
-    hstx.set_audio_sample_rate(_audio_rate);
+    if (_audio_enable)
+      _audio_enable(hstx, _audio_rate);
     _audio_frame = 0;
     bool result = hstx.init(91, 30, pimoroni::DVHSTX::MODE_TEXT_RGB111,
                             double_buffered, pinout);

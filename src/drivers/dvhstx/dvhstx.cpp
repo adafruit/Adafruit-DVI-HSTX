@@ -440,6 +440,18 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
         return false;
     }
 
+    if (scanline_cb) {
+        if (mode != MODE_RGB565) {
+            dvhstx_debug("Scanline callbacks need MODE_RGB565\n");
+            return false;
+        }
+        // The callback draws whole output lines.
+        h_repeat_shift = 0;
+        v_repeat_shift = 0;
+        frame_width = display_width = timing_mode->h_active_pixels;
+        frame_height = display_height = timing_mode->v_active_lines;
+    }
+
     display = this;
     display_palette = get_palette();
     
@@ -525,6 +537,7 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
         return false;
     }
 
+    if (!scanline_cb) {
 #ifdef MICROPY_BUILD_TYPE
     if (frame_width * frame_height * frame_bytes_per_pixel > sizeof(frame_buffer_a)) {
         panic("Frame buffer too large");
@@ -545,6 +558,7 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
 #endif
     memset(frame_buffer_display, 0, frame_width * frame_height * frame_bytes_per_pixel);
     memset(frame_buffer_back, 0, frame_width * frame_height * frame_bytes_per_pixel);
+    }
 
     memset(palette, 0, PALETTE_SIZE * sizeof(palette[0]));
 

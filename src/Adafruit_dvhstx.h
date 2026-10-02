@@ -348,6 +348,84 @@ private:
   bool double_buffered;
 };
 
+/// DVI output drawn one line at a time by your callback, with no frame
+/// buffer. For emulators and other code that generates each line itself.
+class DVHSTXScanline : public DVHSTXAudio {
+public:
+  /// Draws one output line into dst: width() RGB565 pixels, two per 32-bit
+  /// word, low half first. Runs in the DMA interrupt for every active line
+  /// (active_line from 0 to height()-1), so it must be fast and live in RAM
+  /// (__not_in_flash_func).
+  typedef pimoroni::DVHSTX::ScanlineCallback ScanlineCallback;
+
+  /**************************************************************************/
+  /*!
+     @brief    Instantiate a scanline-callback display
+     @param    pinout Details of the HSTX pinout
+     @param    res    Video mode; the callback draws the full output line,
+                      e.g. 640x480 for DVHSTX_RESOLUTION_320x240
+  */
+  /**************************************************************************/
+  DVHSTXScanline(DVHSTXPinout pinout, DVHSTXResolution res)
+      : pinout(pinout), res{res} {}
+  ~DVHSTXScanline() { end(); }
+
+  /**************************************************************************/
+  /*!
+     @brief    Start the display
+     @param    cb Function that draws each line
+     @return   true if successful, false in case of error
+  */
+  /**************************************************************************/
+  bool begin(ScanlineCallback cb) {
+    if (!cb)
+      return false;
+    if (_audio_enable)
+      _audio_enable(hstx, _audio_rate);
+    _audio_frame = 0;
+    hstx.set_scanline_callback(cb);
+    bool result =
+        hstx.init(dvhstx_width(res), dvhstx_height(res),
+                  pimoroni::DVHSTX::MODE_RGB565, false, pinout);
+    _audio_running = result && _audio_rate;
+    return result;
+  }
+  /**************************************************************************/
+  /*!
+     @brief    Stop the display
+  */
+  /**************************************************************************/
+  void end() { hstx.reset(); }
+
+  /**************************************************************************/
+  /*!
+     @brief    Pixels per output line, valid after begin()
+     @return   Width in pixels
+  */
+  /**************************************************************************/
+  int16_t width() const { return hstx.get_width(); }
+  /**************************************************************************/
+  /*!
+     @brief    Output lines per frame, valid after begin()
+     @return   Height in lines
+  */
+  /**************************************************************************/
+  int16_t height() const { return hstx.get_height(); }
+
+  /**************************************************************************/
+  /*!
+     @brief    Count the frames sent to the display
+     @return   Frames sent since begin()
+  */
+  /**************************************************************************/
+  uint32_t getFrameCount() const { return hstx.get_frame_count(); }
+
+private:
+  DVHSTXPinout pinout;
+  DVHSTXResolution res;
+  mutable pimoroni::DVHSTX hstx;
+};
+
 using TextColor = pimoroni::DVHSTX::TextColour;
 
 /// A text-mode canvas displaying to a DVI monitor

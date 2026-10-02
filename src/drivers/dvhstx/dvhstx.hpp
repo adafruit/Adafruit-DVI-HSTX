@@ -38,6 +38,11 @@ namespace pimoroni {
     static constexpr uint NUM_AUDIO_CHANS = 4;
 
 
+    // Draws one output line: h_active_pixels RGB565 pixels into dst, two
+    // per word, low half first. Called from the DMA interrupt for every
+    // active line (active_line from 0), so it must be fast and in RAM.
+    typedef void (*ScanlineCallback)(uint32_t v_scanline, uint32_t active_line, uint32_t* dst);
+
     enum Mode {
       MODE_PALETTE = 2,
       MODE_RGB565 = 1,
@@ -134,6 +139,12 @@ namespace pimoroni {
       void enable_audio(uint32_t sample_rate);
       bool get_audio_enabled() const { return audio_on; }
 
+      // Draw lines with cb from the next init() instead of a frame buffer.
+      // MODE_RGB565 only; the width and height passed to init() pick the
+      // video mode as usual, but cb draws the full output line, e.g. 640
+      // pixels for 320x240, and no frame buffer is allocated.
+      void set_scanline_callback(ScanlineCallback cb) { scanline_cb = cb; }
+
       // Frames sent since init(); wraps after about 2 years at 60 Hz.
       uint32_t get_frame_count() const { return frame_count; }
 
@@ -151,6 +162,7 @@ namespace pimoroni {
       void fill_gfx_line(uint32_t* dst_ptr, int y);
       void fill_text_line(uint32_t* line, int y);
 
+      ScanlineCallback scanline_cb = nullptr;
       uint32_t audio_sample_rate = 0;
       bool audio_on = false;
       // Set by enable_audio(), so init() reaches the audio code only then.

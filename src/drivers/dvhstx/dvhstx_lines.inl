@@ -34,6 +34,10 @@ namespace pimoroni {
 
 // Expand frame buffer row y into the pixel words of a line buffer.
 inline __attribute__((always_inline)) void DVHSTX::fill_gfx_line(uint32_t* dst_ptr, int y) {
+    if (scanline_cb) {
+        scanline_cb(v_scanline, y, dst_ptr);
+        return;
+    }
     if (line_bytes_per_pixel == 2) {
         uint16_t* src_ptr = (uint16_t*)&frame_buffer_display[y * 2 * (timing_mode->h_active_pixels >> h_repeat_shift)];
         if (h_repeat_shift == 2) {

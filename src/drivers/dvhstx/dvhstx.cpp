@@ -228,6 +228,7 @@ void __scratch_x("display") DVHSTX::gfx_dma_handler() {
     if (++v_scanline == v_total_active_lines) {
         v_scanline = 0;
         line_num = -1;
+        frame_count++;
         if (flip_next) {
             flip_next = false;
             display->flip_now();
@@ -356,6 +357,7 @@ void __scratch_x("display") DVHSTX::text_dma_handler() {
     if (++v_scanline == v_total_active_lines) {
         v_scanline = 0;
         line_num = -1;
+        frame_count++;
         if (flip_next) {
             flip_next = false;
             display->flip_now();
@@ -505,6 +507,7 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
     line_num = -1;
     v_scanline = 2;
     flip_next = false;
+    frame_count = 0;
 
     display_width = width;
     display_height = height;

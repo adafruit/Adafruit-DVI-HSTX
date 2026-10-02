@@ -121,6 +121,9 @@ namespace pimoroni {
       void gfx_dma_handler();
       void text_dma_handler();
 
+      // Frames sent since init(); wraps after about 2 years at 60 Hz.
+      uint32_t get_frame_count() const { return frame_count; }
+
       void set_cursor(int x, int y) { cursor_x = x; cursor_y = y; }
       void cursor_off(void) { cursor_y = -1; }
 
@@ -138,6 +141,7 @@ namespace pimoroni {
 
       volatile int v_scanline = 2;
       volatile bool flip_next;
+      volatile uint32_t frame_count = 0;
 
       bool inited = false;
 

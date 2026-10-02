@@ -384,9 +384,8 @@ public:
       _audio_enable(hstx, _audio_rate);
     _audio_frame = 0;
     hstx.set_scanline_callback(cb);
-    bool result =
-        hstx.init(dvhstx_width(res), dvhstx_height(res),
-                  pimoroni::DVHSTX::MODE_RGB565, false, pinout);
+    bool result = hstx.init(dvhstx_width(res), dvhstx_height(res),
+                            pimoroni::DVHSTX::MODE_RGB565, false, pinout);
     _audio_running = result && _audio_rate;
     return result;
   }

@@ -13,7 +13,7 @@ Proceed at your own discretion.
 
 ## Introduction
 
-DV HSTX will enable you to create big, bold audio visual projects using Arduino and an HDMI display of your choice.
+DV HSTX will enable you to create big, bold audio visual projects using Arduino and a DVI display of your choice.
 
 ![Text mode display](hstx-textmode.png)
 ![Graphics](hstx-graphicsmode.png)

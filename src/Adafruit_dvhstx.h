@@ -4,6 +4,17 @@
 
 #include "drivers/dvhstx/dvhstx.hpp"
 
+// Define DVHSTX_NO_CLOCK_SETUP before including this header (in one file
+// only) when the sketch sets clk_sys itself, e.g. set_sys_clock_khz(252000).
+// The library then leaves clk_sys alone and runs HSTX from clk_sys / 2, so
+// begin() returns false unless clk_sys is twice the mode's clock (252 MHz for
+// the 640x480 family).
+#if defined(DVHSTX_NO_CLOCK_SETUP) && !DOXYGEN
+extern "C" {
+bool dvhstx_no_clock_setup = true;
+}
+#endif
+
 #if DOXYGEN
 /// Enumerated types in the library. Due to a technical limitations in the
 /// documentation generator, these are displayed as members of a class called

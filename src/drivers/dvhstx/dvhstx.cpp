@@ -296,13 +296,20 @@ extern "C" void __no_inline_not_in_flash_func(display_setup_clock_preinit)() {
     restore_interrupts(intr_stash);
 }
 
+// Set true (by defining DVHSTX_NO_CLOCK_SETUP before including
+// Adafruit_dvhstx.h) when the sketch owns clk_sys. The library then skips the
+// preinit and runs HSTX from clk_sys / 2, which must be twice the mode's clock.
+extern "C" {
+__attribute__((weak)) bool dvhstx_no_clock_setup = false;
+}
+
 #ifndef MICROPY_BUILD_TYPE
 // Trigger clock setup early - on MicroPython this is done by a hook in main.
 namespace {
     class DV_preinit {
         public:
         DV_preinit() {
-            display_setup_clock_preinit();
+            if (!dvhstx_no_clock_setup) display_setup_clock_preinit();
         }
     };
     DV_preinit dv_preinit __attribute__ ((init_priority (101))) ;
@@ -311,6 +318,14 @@ namespace {
 
 void DVHSTX::display_setup_clock() {
     const uint32_t dvi_clock_khz = timing_mode->bit_clk_khz >> 1;
+    if (dvhstx_no_clock_setup) {
+        // init() already checked clk_sys is exactly twice the HSTX clock
+        clock_configure_int_divider(clk_hstx,
+                                    0,
+                                    CLOCKS_CLK_HSTX_CTRL_AUXSRC_VALUE_CLK_SYS,
+                                    clock_get_hz(clk_sys), 2);
+        return;
+    }
     uint vco_freq, post_div1, post_div2;
     if (!check_sys_clock_khz(dvi_clock_khz, &vco_freq, &post_div1, &post_div2))
         panic("System clock of %u kHz cannot be exactly achieved", dvi_clock_khz);
@@ -421,6 +436,12 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
 
     if (!timing_mode) {
         dvhstx_debug("Unsupported resolution %dx%d", width, height);
+        return false;
+    }
+
+    if (dvhstx_no_clock_setup &&
+        clock_get_hz(clk_sys) != (timing_mode->bit_clk_khz >> 1) * 2000u) {
+        dvhstx_debug("clk_sys must be twice the HSTX clock for this mode\n");
         return false;
     }
 

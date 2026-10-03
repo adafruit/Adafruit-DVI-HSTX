@@ -5,6 +5,18 @@
 #include "dvhstx.hpp"
 #include "font.h"
 
+#ifdef MICROPY_BUILD_TYPE
+extern "C" {
+void dvhstx_debug(const char *fmt, ...);
+}
+#elif defined(ARDUINO)
+#include <Arduino.h>
+#define dvhstx_debug(...) ((void)0)
+#else
+#include <cstdio>
+#define dvhstx_debug printf
+#endif
+
 // If changing the font, note this code will not handle glyphs wider than 13 pixels
 #define FONT (&intel_one_mono)
 
@@ -60,7 +72,7 @@ inline __attribute__((always_inline)) void DVHSTX::fill_gfx_line(uint32_t* dst_p
             for (int i = 0; i < timing_mode->h_active_pixels >> 2; ++i) {
                 uint32_t val = (uint32_t)(*src_ptr++) * 0x01010101;
                 *dst_ptr++ = val;
-            }                
+            }
         }
         else {
             for (int i = 0; i < timing_mode->h_active_pixels >> 2; ++i) {
@@ -110,7 +122,7 @@ inline __attribute__((always_inline)) void DVHSTX::fill_text_line(uint32_t* line
         uint32_t* dst_ptr = line;
         for (int i = 0; i < frame_width; i += 2) {
             uint32_t tmp_h, tmp_l;
-            
+
             uint8_t c = (*src_ptr++ - 0x20);
             uint32_t bits = (c < 95) ? font_cache[c * 24 + char_y] : 0;
             uint8_t attr = *src_ptr++;
@@ -129,7 +141,7 @@ inline __attribute__((always_inline)) void DVHSTX::fill_text_line(uint32_t* line
                 *dst_ptr++ = tmp_l;
                 break;
             }
-       
+
             c = (*src_ptr++ - 0x20);
             bits = (c < 95) ? font_cache[c * 24 + char_y] : 0;
             attr = *src_ptr++;

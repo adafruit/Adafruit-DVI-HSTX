@@ -36,22 +36,6 @@ __attribute__((section(".uninitialized_data"))) static uint8_t frame_buffer_a[FR
 __attribute__((section(".uninitialized_data"))) static uint8_t frame_buffer_b[FRAME_BUFFER_SIZE];
 #endif
 
-
-
-#ifdef MICROPY_BUILD_TYPE
-extern "C" {
-void dvhstx_debug(const char *fmt, ...);
-}
-#elif defined(ARDUINO)
-#include <Arduino.h>
-// #define dvhstx_debug Serial.printf
-#define dvhstx_debug(...) ((void)0)
-#else
-#include <cstdio>
-#define dvhstx_debug printf
-#endif
-
-
 // ----------------------------------------------------------------------------
 // HSTX command lists
 
@@ -497,16 +481,12 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
     pixels_pending = false;
     num_chans = NUM_CHANS;
     if (audio_sample_rate) {
-        if (!audio_setup || !(this->*audio_setup)(is_text_mode, &line_header, &line_header_words))
+        if (!audio_chan_claimed && dma_channel_is_claimed(NUM_AUDIO_CHANS - 1)) {
+            dvhstx_debug("DMA channel %d is in use\n", NUM_AUDIO_CHANS - 1);
             return false;
-        if (!audio_chan_claimed) {
-            if (dma_channel_is_claimed(NUM_AUDIO_CHANS - 1)) {
-                dvhstx_debug("DMA channel %d is in use\n", NUM_AUDIO_CHANS - 1);
-                return false;
-            }
-            dma_channel_claim(NUM_AUDIO_CHANS - 1);
-            audio_chan_claimed = true;
         }
+        if (!(this->*audio_setup)(is_text_mode, &line_header, &line_header_words))
+            return false;
         audio_on = true;
         num_chans = NUM_AUDIO_CHANS;
     }
@@ -537,27 +517,36 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
         return false;
     }
 
-    if (!scanline_cb) {
-#ifdef MICROPY_BUILD_TYPE
-    if (frame_width * frame_height * frame_bytes_per_pixel > sizeof(frame_buffer_a)) {
-        panic("Frame buffer too large");
-    }
-
-    frame_buffer_display = frame_buffer_a;
-    frame_buffer_back = double_buffered ? frame_buffer_b : frame_buffer_a;
-#else
-    frame_buffer_display = (uint8_t*)malloc(frame_width * frame_height * frame_bytes_per_pixel);
-    frame_buffer_back = double_buffered ? (uint8_t*)malloc(frame_width * frame_height * frame_bytes_per_pixel) : frame_buffer_display;
-    if (!frame_buffer_display || !frame_buffer_back) {
-        dvhstx_debug("Not enough RAM for the frame buffer\n");
+    line_buffers = nullptr;
+    auto free_buffers = [this]() {
+        free(line_buffers);
+        line_buffers = nullptr;
+#ifndef MICROPY_BUILD_TYPE
         free(frame_buffer_display);
         if (frame_buffer_back != frame_buffer_display) free(frame_buffer_back);
         frame_buffer_display = frame_buffer_back = nullptr;
-        return false;
-    }
 #endif
-    memset(frame_buffer_display, 0, frame_width * frame_height * frame_bytes_per_pixel);
-    memset(frame_buffer_back, 0, frame_width * frame_height * frame_bytes_per_pixel);
+    };
+
+    if (!scanline_cb) {
+#ifdef MICROPY_BUILD_TYPE
+        if (frame_width * frame_height * frame_bytes_per_pixel > sizeof(frame_buffer_a)) {
+            panic("Frame buffer too large");
+        }
+
+        frame_buffer_display = frame_buffer_a;
+        frame_buffer_back = double_buffered ? frame_buffer_b : frame_buffer_a;
+#else
+        frame_buffer_display = (uint8_t*)malloc(frame_width * frame_height * frame_bytes_per_pixel);
+        frame_buffer_back = double_buffered ? (uint8_t*)malloc(frame_width * frame_height * frame_bytes_per_pixel) : frame_buffer_display;
+        if (!frame_buffer_display || !frame_buffer_back) {
+            dvhstx_debug("Not enough RAM for the frame buffer\n");
+            free_buffers();
+            return false;
+        }
+#endif
+        memset(frame_buffer_display, 0, frame_width * frame_height * frame_bytes_per_pixel);
+        memset(frame_buffer_back, 0, frame_width * frame_height * frame_bytes_per_pixel);
     }
 
     memset(palette, 0, PALETTE_SIZE * sizeof(palette[0]));
@@ -567,15 +556,14 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
 
     const int frame_pixel_words = (frame_width * h_repeat * line_bytes_per_pixel + 3) >> 2;
     const int frame_line_words = frame_pixel_words + line_header_words;
-    const int frame_lines = (v_repeat == 1 || audio_on) ? num_chans : NUM_FRAME_LINES;
+    // With audio, text lines use one buffer per channel and graphics lines
+    // three (see dvhstx_audio.cpp).
+    const int frame_lines = audio_on ? (is_text_mode ? num_chans : 3)
+                          : (v_repeat == 1) ? NUM_CHANS : NUM_FRAME_LINES;
     line_buffers = (uint32_t*)malloc(frame_line_words * 4 * frame_lines);
     if (!line_buffers) {
         dvhstx_debug("Not enough RAM for the line buffers\n");
-#ifndef MICROPY_BUILD_TYPE
-        free(frame_buffer_display);
-        if (frame_buffer_back != frame_buffer_display) free(frame_buffer_back);
-        frame_buffer_display = frame_buffer_back = nullptr;
-#endif
+        free_buffers();
         return false;
     }
 
@@ -608,6 +596,11 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
         };
         // Need to pre-render the font to RAM to be fast enough.
         font_cache = (uint32_t*)malloc(4 * FONT->line_height * 96);
+        if (!font_cache) {
+            dvhstx_debug("Not enough RAM for the font cache\n");
+            free_buffers();
+            return false;
+        }
         uint32_t* font_cache_ptr = font_cache;
         for (int c = 0x20; c < 128; ++c) {
             for (int y = 0; y < FONT->line_height; ++y) {
@@ -740,6 +733,11 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
 
     dvhstx_debug("GPIO configured\n");
 
+    if (audio_on && !audio_chan_claimed) {
+        dma_channel_claim(NUM_AUDIO_CHANS - 1);
+        audio_chan_claimed = true;
+    }
+
     // The channels are set up identically, to transfer a whole scanline and
     // then chain to the next channel. Each time a channel finishes, we
     // reconfigure the one that just finished, meanwhile the other channel(s)
@@ -768,7 +766,7 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
         count_of(vblank_line_vsync_off),
         false
     );
-    for (int i = 2; i < (int)num_chans; ++i) {
+    for (int i = 2; i < num_chans; ++i) {
         c = dma_channel_get_default_config(i);
         channel_config_set_chain_to(&c, (i+1) % num_chans);
         channel_config_set_dreq(&c, DREQ_HSTX);
@@ -810,7 +808,7 @@ void DVHSTX::reset() {
     irq_set_enabled(DMA_IRQ_2, false);
     irq_remove_handler(DMA_IRQ_2, irq_get_exclusive_handler(DMA_IRQ_2));
 
-    for (int i = 0; i < (int)num_chans; ++i)
+    for (int i = 0; i < num_chans; ++i)
         dma_channel_abort(i);
     if (audio_chan_claimed) {
         dma_irqn_set_channel_enabled(2, NUM_AUDIO_CHANS - 1, false);

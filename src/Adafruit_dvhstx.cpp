@@ -6,8 +6,8 @@ extern "C" {
 #include "pico_hdmi/hstx_packet.h"
 }
 
-// Packets queued ahead of the display, about 17 ms at 48 kHz. The queue
-// holds 256; staying below that leaves room for a write in progress.
+// audioAvailableForWrite() offers room up to this many packets, about 17 ms
+// at 48 kHz, of the 256 the queue holds.
 #define DVHSTX_AUDIO_QUEUE_TARGET 200
 #define DVHSTX_AUDIO_FRAMES_PER_PACKET 4
 

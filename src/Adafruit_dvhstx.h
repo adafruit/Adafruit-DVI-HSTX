@@ -212,7 +212,10 @@ public:
      @brief    Stop the display
   */
   /**************************************************************************/
-  void end() { hstx.reset(); }
+  void end() {
+    hstx.reset();
+    _audio_running = false;
+  }
 
   /**************************************************************************/
   /*!
@@ -300,7 +303,10 @@ public:
      @brief    Stop the display
   */
   /**************************************************************************/
-  void end() { hstx.reset(); }
+  void end() {
+    hstx.reset();
+    _audio_running = false;
+  }
 
   /**************************************************************************/
   /*!
@@ -355,7 +361,7 @@ public:
   /// Draws one output line into dst: width() RGB565 pixels, two per 32-bit
   /// word, low half first. Runs in the DMA interrupt for every active line
   /// (active_line from 0 to height()-1), so it must be fast and live in RAM
-  /// (__not_in_flash_func).
+  /// (__not_in_flash_func). Same signature as Adafruit_DVI_Audio's callback.
   typedef pimoroni::DVHSTX::ScanlineCallback ScanlineCallback;
 
   /**************************************************************************/
@@ -378,8 +384,6 @@ public:
   */
   /**************************************************************************/
   bool begin(ScanlineCallback cb) {
-    if (!cb)
-      return false;
     if (_audio_enable)
       _audio_enable(hstx, _audio_rate);
     _audio_frame = 0;
@@ -394,7 +398,10 @@ public:
      @brief    Stop the display
   */
   /**************************************************************************/
-  void end() { hstx.reset(); }
+  void end() {
+    hstx.reset();
+    _audio_running = false;
+  }
 
   /**************************************************************************/
   /*!
@@ -493,7 +500,10 @@ public:
      @brief    Stop the display
   */
   /**************************************************************************/
-  void end() { hstx.reset(); }
+  void end() {
+    hstx.reset();
+    _audio_running = false;
+  }
 
   /**************************************************************************/
   /*!

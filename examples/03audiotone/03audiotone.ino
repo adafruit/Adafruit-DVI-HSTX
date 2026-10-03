@@ -27,7 +27,6 @@ static int16_t sine[SAMPLE_RATE / TONE_HZ]; // one cycle of the tone
 static size_t phase;
 
 void setup() {
-  Serial.begin(115200);
   for (size_t i = 0; i < count_of(sine); i++) {
     sine[i] = (int16_t)(sinf(i * 2.0f * PI / count_of(sine)) * 6000);
   }

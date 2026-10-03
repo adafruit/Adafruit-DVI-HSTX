@@ -35,12 +35,14 @@ namespace pimoroni {
     // With audio, graphics lines take two DMA transfers each and need one
     // more channel in flight to keep up at 1024x768. The last channel is
     // claimed only while audio runs.
-    static constexpr uint NUM_AUDIO_CHANS = 4;
+    static constexpr int NUM_AUDIO_CHANS = 4;
 
 
     // Draws one output line: h_active_pixels RGB565 pixels into dst, two
     // per word, low half first. Called from the DMA interrupt for every
     // active line (active_line from 0), so it must be fast and in RAM.
+    // v_scanline counts blanking lines too; the signature matches
+    // Adafruit_DVI_Audio's callback so its sketches carry over.
     typedef void (*ScanlineCallback)(uint32_t v_scanline, uint32_t active_line, uint32_t* dst);
 
     enum Mode {
@@ -137,7 +139,6 @@ namespace pimoroni {
       // the blanking, which displays that take only plain DVI may not accept.
       // Defined in dvhstx_audio.cpp, which is only linked if this is called.
       void enable_audio(uint32_t sample_rate);
-      bool get_audio_enabled() const { return audio_on; }
 
       // Draw lines with cb from the next init() instead of a frame buffer.
       // MODE_RGB565 only; the width and height passed to init() pick the
@@ -169,7 +170,7 @@ namespace pimoroni {
       bool (DVHSTX::*audio_setup)(bool, const uint32_t**, uint*) = nullptr;
       void (*audio_irq)() = nullptr;
       // DMA channels in the ring: 3, or NUM_AUDIO_CHANS with audio.
-      uint num_chans = 3;
+      int num_chans = 3;
       bool audio_chan_claimed = false;
       // Header words in front of the pixels of each line buffer.
       uint line_header_words;

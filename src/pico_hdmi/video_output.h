@@ -9,6 +9,6 @@
 
 #define MODE_H_SYNC_POSITIVE 0
 #define MODE_V_SYNC_POSITIVE 0
-// Default only; dvhstx.cpp sets it per mode with
+// Default only; dvhstx_audio.cpp sets it per mode with
 // hstx_di_queue_set_hsync_active().
 #define DI_HSYNC_ACTIVE true

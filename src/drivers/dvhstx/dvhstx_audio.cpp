@@ -29,14 +29,6 @@ extern "C" {
 #include "pico_hdmi/hstx_data_island_queue.h"
 }
 
-#ifdef MICROPY_BUILD_TYPE
-extern "C" void dvhstx_debug(const char *fmt, ...);
-#elif defined(ARDUINO)
-#define dvhstx_debug(...) ((void)0)
-#else
-#include <cstdio>
-#define dvhstx_debug printf
-#endif
 
 using namespace pimoroni;
 
@@ -68,8 +60,13 @@ static uint di_blank_len, di_active_len;
 static uint di_offset;
 static const uint32_t* di_null;
 
+// The island goes inside the hsync pulse when it fits there.
+static bool di_in_hsync(const struct dvi_timing* t) {
+    return t->h_sync_width >= W_PREAMBLE + W_DATA_ISLAND;
+}
+
 static bool di_fits(const struct dvi_timing* t) {
-    return t->h_sync_width >= W_PREAMBLE + W_DATA_ISLAND ||
+    return di_in_hsync(t) ||
            t->h_back_porch >= W_PREAMBLE + W_DATA_ISLAND + W_VIDEO_PREAMBLE + W_VIDEO_GUARD_BAND;
 }
 
@@ -80,7 +77,7 @@ static uint build_di_line(uint32_t* buf, const struct dvi_timing* t, const uint3
     uint32_t* p = buf;
     const uint32_t sync_h0 = vsync ? SYNC_V0_H0 : SYNC_V1_H0;
     const uint32_t sync_h1 = vsync ? SYNC_V0_H1 : SYNC_V1_H1;
-    const bool in_hsync = t->h_sync_width >= W_PREAMBLE + W_DATA_ISLAND;
+    const bool in_hsync = di_in_hsync(t);
     int back_porch = t->h_back_porch;
 
     *p++ = HSTX_CMD_RAW_REPEAT | t->h_front_porch;
@@ -132,14 +129,14 @@ static uint build_di_line(uint32_t* buf, const struct dvi_timing* t, const uint3
     return p - buf;
 }
 
-// ACR N values as pico_hdmi uses them; CTS follows from the pixel clock.
+// ACR N values as pico_hdmi uses them, 0 for unsupported rates; CTS
+// follows from the pixel clock.
 static uint32_t acr_n(uint32_t sample_rate) {
     switch (sample_rate) {
     case 32000: return 4096;
     case 44100: return 6272;
-    case 88200: return 12544;
-    case 96000: return 12288;
-    default: return 6144;
+    case 48000: return 6144;
+    default: return 0;
     }
 }
 
@@ -272,8 +269,12 @@ bool DVHSTX::setup_audio(bool text, const uint32_t** header, uint* header_words)
         dvhstx_debug("No room for audio in this mode\n");
         return false;
     }
+    if (!acr_n(audio_sample_rate)) {
+        dvhstx_debug("Unsupported audio sample rate\n");
+        return false;
+    }
     audio_display = this;
-    const bool in_hsync = t->h_sync_width >= W_PREAMBLE + W_DATA_ISLAND;
+    const bool in_hsync = di_in_hsync(t);
     const uint32_t h_total = t->h_front_porch + t->h_sync_width + t->h_back_porch + t->h_active_pixels;
     // HSTX sends one pixel every 5 clk_hstx cycles (see csr below).
     const uint32_t pixel_clock = clock_get_hz(clk_hstx) / 5;

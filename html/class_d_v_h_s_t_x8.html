@@ -76,6 +76,7 @@ Inheritance diagram for DVHSTX8:</div>
  <div class="center">
   <img src="class_d_v_h_s_t_x8.png" usemap="#DVHSTX8_map" alt=""/>
   <map id="DVHSTX8_map" name="DVHSTX8_map">
+<area href="class_d_v_h_s_t_x_audio.html" alt="DVHSTXAudio" shape="rect" coords="106,0,202,24"/>
 </map>
  </div></div>
 <table class="memberdecls">
@@ -91,6 +92,9 @@ Public Member Functions</h2></td></tr>
 void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_d_v_h_s_t_x8.html#a87b70c79d1ad2c2c7fbd227f496fc274">end</a> ()</td></tr>
 <tr class="memdesc:a87b70c79d1ad2c2c7fbd227f496fc274"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stop the display. <br /></td></tr>
 <tr class="separator:a87b70c79d1ad2c2c7fbd227f496fc274"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a58ca372603d9ecac7c6117ce4283b02a"><td class="memItemLeft" align="right" valign="top">uint32_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_d_v_h_s_t_x8.html#a58ca372603d9ecac7c6117ce4283b02a">getFrameCount</a> () const</td></tr>
+<tr class="memdesc:a58ca372603d9ecac7c6117ce4283b02a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Count the frames sent to the display.  <a href="#a58ca372603d9ecac7c6117ce4283b02a">More...</a><br /></td></tr>
+<tr class="separator:a58ca372603d9ecac7c6117ce4283b02a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ac67fc03e6395ceebf1239289ab5b724a"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_d_v_h_s_t_x8.html#ac67fc03e6395ceebf1239289ab5b724a">setColor</a> (uint8_t idx, uint8_t r, uint8_t g, uint8_t b)</td></tr>
 <tr class="memdesc:ac67fc03e6395ceebf1239289ab5b724a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the given palette entry to a RGB888 color.  <a href="#ac67fc03e6395ceebf1239289ab5b724a">More...</a><br /></td></tr>
 <tr class="separator:ac67fc03e6395ceebf1239289ab5b724a"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -100,6 +104,39 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 <tr class="memitem:af8dac30ac535e726d062148b63c3f588"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_d_v_h_s_t_x8.html#af8dac30ac535e726d062148b63c3f588">swap</a> (bool copy_framebuffer=false)</td></tr>
 <tr class="memdesc:af8dac30ac535e726d062148b63c3f588"><td class="mdescLeft">&#160;</td><td class="mdescRight">If double-buffered, wait for retrace and swap buffers. Otherwise, do nothing (returns immediately)  <a href="#af8dac30ac535e726d062148b63c3f588">More...</a><br /></td></tr>
 <tr class="separator:af8dac30ac535e726d062148b63c3f588"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="inherit_header pub_methods_class_d_v_h_s_t_x_audio"><td colspan="2" onclick="javascript:toggleInherit('pub_methods_class_d_v_h_s_t_x_audio')"><img src="closed.png" alt="-"/>&#160;Public Member Functions inherited from <a class="el" href="class_d_v_h_s_t_x_audio.html">DVHSTXAudio</a></td></tr>
+<tr class="memitem:aabbef54e92b191a1240daf22afc4cf69 inherit pub_methods_class_d_v_h_s_t_x_audio"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_d_v_h_s_t_x_audio.html#aabbef54e92b191a1240daf22afc4cf69">enableAudio</a> (uint32_t sample_rate=48000)</td></tr>
+<tr class="memdesc:aabbef54e92b191a1240daf22afc4cf69 inherit pub_methods_class_d_v_h_s_t_x_audio"><td class="mdescLeft">&#160;</td><td class="mdescRight">Send audio from the next begin(). Off by default.  <a href="class_d_v_h_s_t_x_audio.html#aabbef54e92b191a1240daf22afc4cf69">More...</a><br /></td></tr>
+<tr class="separator:aabbef54e92b191a1240daf22afc4cf69 inherit pub_methods_class_d_v_h_s_t_x_audio"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a880dc298adb488a6382efbd7089d7149 inherit pub_methods_class_d_v_h_s_t_x_audio"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_d_v_h_s_t_x_audio.html#a880dc298adb488a6382efbd7089d7149">audioWrite</a> (const int16_t *lr, size_t frames)</td></tr>
+<tr class="memdesc:a880dc298adb488a6382efbd7089d7149 inherit pub_methods_class_d_v_h_s_t_x_audio"><td class="mdescLeft">&#160;</td><td class="mdescRight">Queue 16-bit stereo audio.  <a href="class_d_v_h_s_t_x_audio.html#a880dc298adb488a6382efbd7089d7149">More...</a><br /></td></tr>
+<tr class="separator:a880dc298adb488a6382efbd7089d7149 inherit pub_methods_class_d_v_h_s_t_x_audio"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9456e329ce4f705c63ceed020cff4c9c inherit pub_methods_class_d_v_h_s_t_x_audio"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_d_v_h_s_t_x_audio.html#a9456e329ce4f705c63ceed020cff4c9c">audioAvailableForWrite</a> ()</td></tr>
+<tr class="memdesc:a9456e329ce4f705c63ceed020cff4c9c inherit pub_methods_class_d_v_h_s_t_x_audio"><td class="mdescLeft">&#160;</td><td class="mdescRight">How much audio fits in the queue now.  <a href="class_d_v_h_s_t_x_audio.html#a9456e329ce4f705c63ceed020cff4c9c">More...</a><br /></td></tr>
+<tr class="separator:a9456e329ce4f705c63ceed020cff4c9c inherit pub_methods_class_d_v_h_s_t_x_audio"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a68a1a701c5aebbcd5b4a0413a49e9bd2 inherit pub_methods_class_d_v_h_s_t_x_audio"><td class="memItemLeft" align="right" valign="top">uint32_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_d_v_h_s_t_x_audio.html#a68a1a701c5aebbcd5b4a0413a49e9bd2">audioUnderruns</a> ()</td></tr>
+<tr class="memdesc:a68a1a701c5aebbcd5b4a0413a49e9bd2 inherit pub_methods_class_d_v_h_s_t_x_audio"><td class="mdescLeft">&#160;</td><td class="mdescRight">Count queue underruns.  <a href="class_d_v_h_s_t_x_audio.html#a68a1a701c5aebbcd5b4a0413a49e9bd2">More...</a><br /></td></tr>
+<tr class="separator:a68a1a701c5aebbcd5b4a0413a49e9bd2 inherit pub_methods_class_d_v_h_s_t_x_audio"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="inherited"></a>
+Additional Inherited Members</h2></td></tr>
+<tr class="inherit_header pro_attribs_class_d_v_h_s_t_x_audio"><td colspan="2" onclick="javascript:toggleInherit('pro_attribs_class_d_v_h_s_t_x_audio')"><img src="closed.png" alt="-"/>&#160;Protected Attributes inherited from <a class="el" href="class_d_v_h_s_t_x_audio.html">DVHSTXAudio</a></td></tr>
+<tr class="memitem:a42381d7b6cd760aba1b7a779eecdf3f1 inherit pro_attribs_class_d_v_h_s_t_x_audio"><td class="memItemLeft" align="right" valign="top"><a id="a42381d7b6cd760aba1b7a779eecdf3f1"></a>
+uint32_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_d_v_h_s_t_x_audio.html#a42381d7b6cd760aba1b7a779eecdf3f1">_audio_rate</a> = 0</td></tr>
+<tr class="memdesc:a42381d7b6cd760aba1b7a779eecdf3f1 inherit pro_attribs_class_d_v_h_s_t_x_audio"><td class="mdescLeft">&#160;</td><td class="mdescRight">Sample rate requested by <a class="el" href="class_d_v_h_s_t_x_audio.html#aabbef54e92b191a1240daf22afc4cf69" title="Send audio from the next begin(). Off by default. ">enableAudio()</a>, 0 for video only. <br /></td></tr>
+<tr class="separator:a42381d7b6cd760aba1b7a779eecdf3f1 inherit pro_attribs_class_d_v_h_s_t_x_audio"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4a1b6c71ec7935cbc387ea4a8366a220 inherit pro_attribs_class_d_v_h_s_t_x_audio"><td class="memItemLeft" align="right" valign="top"><a id="a4a1b6c71ec7935cbc387ea4a8366a220"></a>
+void(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_d_v_h_s_t_x_audio.html#a4a1b6c71ec7935cbc387ea4a8366a220">_audio_enable</a> )(pimoroni::DVHSTX &amp;, uint32_t) = nullptr</td></tr>
+<tr class="memdesc:a4a1b6c71ec7935cbc387ea4a8366a220 inherit pro_attribs_class_d_v_h_s_t_x_audio"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set by <a class="el" href="class_d_v_h_s_t_x_audio.html#aabbef54e92b191a1240daf22afc4cf69" title="Send audio from the next begin(). Off by default. ">enableAudio()</a>; begin() calls it to pass the rate on. <br /></td></tr>
+<tr class="separator:a4a1b6c71ec7935cbc387ea4a8366a220 inherit pro_attribs_class_d_v_h_s_t_x_audio"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a18c29bd9cdb219eb4c06d1a7e67685e7 inherit pro_attribs_class_d_v_h_s_t_x_audio"><td class="memItemLeft" align="right" valign="top"><a id="a18c29bd9cdb219eb4c06d1a7e67685e7"></a>
+bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_d_v_h_s_t_x_audio.html#a18c29bd9cdb219eb4c06d1a7e67685e7">_audio_running</a> = false</td></tr>
+<tr class="memdesc:a18c29bd9cdb219eb4c06d1a7e67685e7 inherit pro_attribs_class_d_v_h_s_t_x_audio"><td class="mdescLeft">&#160;</td><td class="mdescRight">True once begin() has started audio. <br /></td></tr>
+<tr class="separator:a18c29bd9cdb219eb4c06d1a7e67685e7 inherit pro_attribs_class_d_v_h_s_t_x_audio"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a80c63eeaa9e20b2aa74f2511615954c6 inherit pro_attribs_class_d_v_h_s_t_x_audio"><td class="memItemLeft" align="right" valign="top"><a id="a80c63eeaa9e20b2aa74f2511615954c6"></a>
+int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_d_v_h_s_t_x_audio.html#a80c63eeaa9e20b2aa74f2511615954c6">_audio_frame</a> = 0</td></tr>
+<tr class="memdesc:a80c63eeaa9e20b2aa74f2511615954c6 inherit pro_attribs_class_d_v_h_s_t_x_audio"><td class="mdescLeft">&#160;</td><td class="mdescRight">IEC 60958 frame counter carried between packets. <br /></td></tr>
+<tr class="separator:a80c63eeaa9e20b2aa74f2511615954c6 inherit pro_attribs_class_d_v_h_s_t_x_audio"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>An 8-bit canvas displaying to a DVI monitor. </p>
@@ -182,6 +219,34 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 
 <p>Start the display. </p>
 <dl class="section return"><dt>Returns</dt><dd>true if successful, false in case of error </dd></dl>
+
+</div>
+</div>
+<a id="a58ca372603d9ecac7c6117ce4283b02a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a58ca372603d9ecac7c6117ce4283b02a">&#9670;&nbsp;</a></span>getFrameCount()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t DVHSTX8::getFrameCount </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Count the frames sent to the display. </p>
+<dl class="section return"><dt>Returns</dt><dd>Frames sent since <a class="el" href="class_d_v_h_s_t_x8.html#a9d620885247659693f715384da223f6a" title="Start the display. ">begin()</a> </dd></dl>
 
 </div>
 </div>

@@ -1,6 +1,6 @@
 var searchData=
 [
-  ['dvhstx16',['DVHSTX16',['../class_d_v_h_s_t_x16.html#a75014349c6c18c780f1a9b7f8d08404e',1,'DVHSTX16']]],
-  ['dvhstx8',['DVHSTX8',['../class_d_v_h_s_t_x8.html#a28aa4c2aaaaae3d6541090e6ee74fba1',1,'DVHSTX8']]],
-  ['dvhstxtext',['DVHSTXText',['../class_d_v_h_s_t_x_text.html#a40a22ef2bd4d8064e11b7cefc6825eff',1,'DVHSTXText']]]
+  ['cell',['Cell',['../struct_d_v_h_s_t_x_text_1_1_cell.html#aa89b84f77682e3fa71a20d56e23b1f1b',1,'DVHSTXText::Cell']]],
+  ['clear',['clear',['../class_d_v_h_s_t_x_text.html#ae2012e56f53c25b0eca98f0f65ce5603',1,'DVHSTXText']]],
+  ['color565',['color565',['../class_d_v_h_s_t_x16.html#a4a2e72dd542933b053c6c7bab4344532',1,'DVHSTX16']]]
 ];

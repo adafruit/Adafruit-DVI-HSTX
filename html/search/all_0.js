@@ -1,6 +1,7 @@
 var searchData=
 [
-  ['attr_5flow_5finten',['ATTR_LOW_INTEN',['../structenum.html#acbaa90949672950b675eecefa7f10ea8a7ae7db5b4071ca9f95aff034e682b9bc',1,'enum']]],
-  ['attr_5fnormal_5finten',['ATTR_NORMAL_INTEN',['../structenum.html#acbaa90949672950b675eecefa7f10ea8ade71590a2c4fb644f15b88e2834fdf53',1,'enum']]],
-  ['attr_5fv_5flow_5finten',['ATTR_V_LOW_INTEN',['../structenum.html#acbaa90949672950b675eecefa7f10ea8a8c94369c375e8ba6ca9654b06039bca4',1,'enum']]]
+  ['_5faudio_5fenable',['_audio_enable',['../class_d_v_h_s_t_x_audio.html#a4a1b6c71ec7935cbc387ea4a8366a220',1,'DVHSTXAudio']]],
+  ['_5faudio_5fframe',['_audio_frame',['../class_d_v_h_s_t_x_audio.html#a80c63eeaa9e20b2aa74f2511615954c6',1,'DVHSTXAudio']]],
+  ['_5faudio_5frate',['_audio_rate',['../class_d_v_h_s_t_x_audio.html#a42381d7b6cd760aba1b7a779eecdf3f1',1,'DVHSTXAudio']]],
+  ['_5faudio_5frunning',['_audio_running',['../class_d_v_h_s_t_x_audio.html#a18c29bd9cdb219eb4c06d1a7e67685e7',1,'DVHSTXAudio']]]
 ];

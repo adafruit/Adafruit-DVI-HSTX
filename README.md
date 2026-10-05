@@ -56,6 +56,11 @@ dry the display gets silence, and `audioUnderruns()` counts it.
   you enable it.
 - Sketches that never call `enableAudio()` use no extra RAM. With audio,
   the packet queue takes 36 KB and one more DMA channel is used.
+- The display claims DMA channels 0-2 when it is constructed, and channel 3
+  in `begin()` when audio is on. Don't claim those channels yourself, or the
+  sketch panics before USB starts. To keep another driver off channel 3
+  until `begin()`, claim only channel 3 and release it just before calling
+  `begin()`.
 - Audio works in every mode except `DVHSTX_RESOLUTION_480x270`, where the
   blanking is too short to carry it; `begin()` returns false there.
 

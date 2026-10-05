@@ -32,7 +32,18 @@ namespace pimoroni {
   class DVHSTX {
   public:
     static constexpr int PALETTE_SIZE = 256;
+    // With audio, graphics lines take two DMA transfers each and need one
+    // more channel in flight to keep up at 1024x768. The last channel is
+    // claimed only while audio runs.
+    static constexpr int NUM_AUDIO_CHANS = 4;
 
+
+    // Draws one output line: h_active_pixels RGB565 pixels into dst, two
+    // per word, low half first. Called from the DMA interrupt for every
+    // active line (active_line from 0), so it must be fast and in RAM.
+    // v_scanline counts blanking lines too; the signature matches
+    // Adafruit_DVI_Audio's callback so its sketches carry over.
+    typedef void (*ScanlineCallback)(uint32_t v_scanline, uint32_t active_line, uint32_t* dst);
 
     enum Mode {
       MODE_PALETTE = 2,
@@ -120,17 +131,51 @@ namespace pimoroni {
       // DMA handlers, should not be called externally
       void gfx_dma_handler();
       void text_dma_handler();
+      void gfx_audio_dma_handler();
+      void text_audio_dma_handler();
+
+      // Send audio at this rate (32000, 44100 or 48000 Hz) from the next
+      // init(); 0 sends video only, the default. Audio puts data islands in
+      // the blanking, which displays that take only plain DVI may not accept.
+      // Defined in dvhstx_audio.cpp, which is only linked if this is called.
+      void enable_audio(uint32_t sample_rate);
+
+      // Draw lines with cb from the next init() instead of a frame buffer.
+      // MODE_RGB565 only; the width and height passed to init() pick the
+      // video mode as usual, but cb draws the full output line, e.g. 640
+      // pixels for 320x240, and no frame buffer is allocated.
+      void set_scanline_callback(ScanlineCallback cb) { scanline_cb = cb; }
+
+      // Frames sent since init(); wraps after about 2 years at 60 Hz.
+      uint32_t get_frame_count() const { return frame_count; }
 
       void set_cursor(int x, int y) { cursor_x = x; cursor_y = y; }
       void cursor_off(void) { cursor_y = -1; }
 
     private:
       RGB888 palette[PALETTE_SIZE];
-      uint8_t* frame_buffer_display;
-      uint8_t* frame_buffer_back;
+      uint8_t* frame_buffer_display = nullptr;
+      uint8_t* frame_buffer_back = nullptr;
       uint32_t* font_cache = nullptr;
 
       void display_setup_clock();
+      bool setup_audio(bool text, const uint32_t** header, uint* header_words);
+      void fill_gfx_line(uint32_t* dst_ptr, int y);
+      void fill_text_line(uint32_t* line, int y);
+
+      ScanlineCallback scanline_cb = nullptr;
+      uint32_t audio_sample_rate = 0;
+      bool audio_on = false;
+      // Set by enable_audio(), so init() reaches the audio code only then.
+      bool (DVHSTX::*audio_setup)(bool, const uint32_t**, uint*) = nullptr;
+      void (*audio_irq)() = nullptr;
+      // DMA channels in the ring: 3, or NUM_AUDIO_CHANS with audio.
+      int num_chans = 3;
+      bool audio_chan_claimed = false;
+      // Header words in front of the pixels of each line buffer.
+      uint line_header_words;
+      // Audio graphics lines: the header went out, the pixels are next.
+      bool pixels_pending = false;
 
       // DMA scanline filling
       uint ch_num = 0;
@@ -138,6 +183,7 @@ namespace pimoroni {
 
       volatile int v_scanline = 2;
       volatile bool flip_next;
+      volatile uint32_t frame_count = 0;
 
       bool inited = false;
 

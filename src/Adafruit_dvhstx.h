@@ -4,6 +4,17 @@
 
 #include "drivers/dvhstx/dvhstx.hpp"
 
+// Define DVHSTX_NO_CLOCK_SETUP before including this header (in one file
+// only) when the sketch sets clk_sys itself, e.g. set_sys_clock_khz(252000).
+// The library then leaves clk_sys alone and runs HSTX from clk_sys / 2, so
+// begin() returns false unless clk_sys is twice the mode's clock (252 MHz for
+// the 640x480 family).
+#if defined(DVHSTX_NO_CLOCK_SETUP) && !DOXYGEN
+extern "C" {
+bool dvhstx_no_clock_setup = true;
+}
+#endif
+
 #if DOXYGEN
 /// Enumerated types in the library. Due to a technical limitations in the
 /// documentation generator, these are displayed as members of a class called
@@ -107,11 +118,71 @@ using pimoroni::DVHSTXPinout;
 #define ADAFRUIT_FRUIT_JAM_CFG                                                 \
   { 13, 15, 17, 19 }
 
+// Switches audio on in the driver. Only referenced from enableAudio(), so the
+// audio code and its 36 KB queue are linked only into sketches that use it.
+void dvhstx_enable_audio(pimoroni::DVHSTX &hstx, uint32_t sample_rate);
+
+/// Audio over the DVI cable, shared by the display classes. Call
+/// enableAudio() before begin(), then keep the queue fed with audioWrite().
+/// Audio needs a display that plays sound from the cable; a plain DVI
+/// monitor or adapter shows the picture but no sound.
+class DVHSTXAudio {
+public:
+  /**************************************************************************/
+  /*!
+     @brief    Send audio from the next begin(). Off by default.
+     @param    sample_rate 32000, 44100 or 48000 Hz
+  */
+  /**************************************************************************/
+  void enableAudio(uint32_t sample_rate = 48000) {
+    _audio_rate = sample_rate;
+    _audio_enable = dvhstx_enable_audio;
+  }
+
+  /**************************************************************************/
+  /*!
+     @brief    Queue 16-bit stereo audio
+     @param    lr Interleaved samples: left, right, left, right ...
+     @param    frames Number of left/right pairs in lr
+     @return   Frames queued, a multiple of 4. Can be fewer than asked when
+               the queue is full; send the rest later. 0 if audio is off.
+  */
+  /**************************************************************************/
+  size_t audioWrite(const int16_t *lr, size_t frames);
+
+  /**************************************************************************/
+  /*!
+     @brief    How much audio fits in the queue now
+     @return   Frames that audioWrite() would accept, 0 if audio is off
+  */
+  /**************************************************************************/
+  size_t audioAvailableForWrite();
+
+  /**************************************************************************/
+  /*!
+     @brief    Count queue underruns
+     @return   Times the queue ran dry and 4 frames of silence were sent.
+               Climbing while audio plays means audioWrite() is too slow.
+  */
+  /**************************************************************************/
+  uint32_t audioUnderruns();
+
+protected:
+  /// Sample rate requested by enableAudio(), 0 for video only
+  uint32_t _audio_rate = 0;
+  /// Set by enableAudio(); begin() calls it to pass the rate on
+  void (*_audio_enable)(pimoroni::DVHSTX &, uint32_t) = nullptr;
+  /// True once begin() has started audio
+  bool _audio_running = false;
+  /// IEC 60958 frame counter carried between packets
+  int _audio_frame = 0;
+};
+
 int16_t dvhstx_width(DVHSTXResolution r);
 int16_t dvhstx_height(DVHSTXResolution r);
 
 /// A 16-bit canvas displaying to a DVI monitor
-class DVHSTX16 : public GFXcanvas16 {
+class DVHSTX16 : public GFXcanvas16, public DVHSTXAudio {
 public:
   /**************************************************************************/
   /*!
@@ -134,9 +205,13 @@ public:
   */
   /**************************************************************************/
   bool begin() {
+    if (_audio_enable)
+      _audio_enable(hstx, _audio_rate);
+    _audio_frame = 0;
     bool result =
         hstx.init(dvhstx_width(res), dvhstx_height(res),
                   pimoroni::DVHSTX::MODE_RGB565, double_buffered, pinout);
+    _audio_running = result && _audio_rate;
     if (!result)
       return false;
     buffer = hstx.get_back_buffer<uint16_t>();
@@ -148,7 +223,18 @@ public:
      @brief    Stop the display
   */
   /**************************************************************************/
-  void end() { hstx.reset(); }
+  void end() {
+    hstx.reset();
+    _audio_running = false;
+  }
+
+  /**************************************************************************/
+  /*!
+     @brief    Count the frames sent to the display
+     @return   Frames sent since begin()
+  */
+  /**************************************************************************/
+  uint32_t getFrameCount() const { return hstx.get_frame_count(); }
 
   /**********************************************************************/
   /*!
@@ -181,7 +267,7 @@ private:
 };
 
 /// An 8-bit canvas displaying to a DVI monitor
-class DVHSTX8 : public GFXcanvas8 {
+class DVHSTX8 : public GFXcanvas8, public DVHSTXAudio {
 public:
   /**************************************************************************/
   /*!
@@ -204,9 +290,13 @@ public:
   */
   /**************************************************************************/
   bool begin() {
+    if (_audio_enable)
+      _audio_enable(hstx, _audio_rate);
+    _audio_frame = 0;
     bool result =
         hstx.init(dvhstx_width(res), dvhstx_height(res),
                   pimoroni::DVHSTX::MODE_PALETTE, double_buffered, pinout);
+    _audio_running = result && _audio_rate;
     if (!result)
       return false;
     for (int i = 0; i < 255; i++) {
@@ -224,7 +314,18 @@ public:
      @brief    Stop the display
   */
   /**************************************************************************/
-  void end() { hstx.reset(); }
+  void end() {
+    hstx.reset();
+    _audio_running = false;
+  }
+
+  /**************************************************************************/
+  /*!
+     @brief    Count the frames sent to the display
+     @return   Frames sent since begin()
+  */
+  /**************************************************************************/
+  uint32_t getFrameCount() const { return hstx.get_frame_count(); }
 
   /**************************************************************************/
   /*!
@@ -264,13 +365,91 @@ private:
   bool double_buffered;
 };
 
+/// DVI output drawn one line at a time by your callback, with no frame
+/// buffer. For emulators and other code that generates each line itself.
+class DVHSTXScanline : public DVHSTXAudio {
+public:
+  /// Draws one output line into dst: width() RGB565 pixels, two per 32-bit
+  /// word, low half first. Runs in the DMA interrupt for every active line
+  /// (active_line from 0 to height()-1), so it must be fast and live in RAM
+  /// (__not_in_flash_func). Same signature as Adafruit_DVI_Audio's callback.
+  typedef pimoroni::DVHSTX::ScanlineCallback ScanlineCallback;
+
+  /**************************************************************************/
+  /*!
+     @brief    Instantiate a scanline-callback display
+     @param    pinout Details of the HSTX pinout
+     @param    res    Video mode; the callback draws the full output line,
+                      e.g. 640x480 for DVHSTX_RESOLUTION_320x240
+  */
+  /**************************************************************************/
+  DVHSTXScanline(DVHSTXPinout pinout, DVHSTXResolution res)
+      : pinout(pinout), res{res} {}
+  ~DVHSTXScanline() { end(); }
+
+  /**************************************************************************/
+  /*!
+     @brief    Start the display
+     @param    cb Function that draws each line
+     @return   true if successful, false in case of error
+  */
+  /**************************************************************************/
+  bool begin(ScanlineCallback cb) {
+    if (_audio_enable)
+      _audio_enable(hstx, _audio_rate);
+    _audio_frame = 0;
+    hstx.set_scanline_callback(cb);
+    bool result = hstx.init(dvhstx_width(res), dvhstx_height(res),
+                            pimoroni::DVHSTX::MODE_RGB565, false, pinout);
+    _audio_running = result && _audio_rate;
+    return result;
+  }
+  /**************************************************************************/
+  /*!
+     @brief    Stop the display
+  */
+  /**************************************************************************/
+  void end() {
+    hstx.reset();
+    _audio_running = false;
+  }
+
+  /**************************************************************************/
+  /*!
+     @brief    Pixels per output line, valid after begin()
+     @return   Width in pixels
+  */
+  /**************************************************************************/
+  int16_t width() const { return hstx.get_width(); }
+  /**************************************************************************/
+  /*!
+     @brief    Output lines per frame, valid after begin()
+     @return   Height in lines
+  */
+  /**************************************************************************/
+  int16_t height() const { return hstx.get_height(); }
+
+  /**************************************************************************/
+  /*!
+     @brief    Count the frames sent to the display
+     @return   Frames sent since begin()
+  */
+  /**************************************************************************/
+  uint32_t getFrameCount() const { return hstx.get_frame_count(); }
+
+private:
+  DVHSTXPinout pinout;
+  DVHSTXResolution res;
+  mutable pimoroni::DVHSTX hstx;
+};
+
 using TextColor = pimoroni::DVHSTX::TextColour;
 
 /// A text-mode canvas displaying to a DVI monitor
 ///
 /// The text mode display is always 91x30 characters at a resolution of 1280x720
 /// pixels.
-class DVHSTXText : public GFXcanvas16 {
+class DVHSTXText : public GFXcanvas16, public DVHSTXAudio {
 public:
   /// Each element of the canvas is a Cell, which comprises a character and an
   /// attribute.
@@ -316,8 +495,12 @@ public:
   */
   /**************************************************************************/
   bool begin() {
+    if (_audio_enable)
+      _audio_enable(hstx, _audio_rate);
+    _audio_frame = 0;
     bool result = hstx.init(91, 30, pimoroni::DVHSTX::MODE_TEXT_RGB111,
                             double_buffered, pinout);
+    _audio_running = result && _audio_rate;
     if (!result)
       return false;
     buffer = hstx.get_back_buffer<uint16_t>();
@@ -328,7 +511,18 @@ public:
      @brief    Stop the display
   */
   /**************************************************************************/
-  void end() { hstx.reset(); }
+  void end() {
+    hstx.reset();
+    _audio_running = false;
+  }
+
+  /**************************************************************************/
+  /*!
+     @brief    Count the frames sent to the display
+     @return   Frames sent since begin()
+  */
+  /**************************************************************************/
+  uint32_t getFrameCount() const { return hstx.get_frame_count(); }
 
   /**************************************************************************/
   /*!

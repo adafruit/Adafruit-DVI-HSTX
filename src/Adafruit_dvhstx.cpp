@@ -1,5 +1,58 @@
 #include "Adafruit_dvhstx.h"
 
+extern "C" {
+#include "drivers/dvhstx/audio_config.h"
+#include "pico_hdmi/hstx_data_island_queue.h"
+#include "pico_hdmi/hstx_packet.h"
+}
+
+// audioAvailableForWrite() offers room up to this many packets, about 17 ms
+// at 48 kHz, of the 256 the queue holds.
+#define DVHSTX_AUDIO_QUEUE_TARGET 200
+#define DVHSTX_AUDIO_FRAMES_PER_PACKET 4
+
+void dvhstx_enable_audio(pimoroni::DVHSTX &hstx, uint32_t sample_rate) {
+  hstx.enable_audio(sample_rate);
+}
+
+size_t DVHSTXAudio::audioAvailableForWrite() {
+  if (!_audio_running)
+    return 0;
+  uint32_t level = hstx_di_queue_get_level();
+  if (level >= DVHSTX_AUDIO_QUEUE_TARGET)
+    return 0;
+  return (DVHSTX_AUDIO_QUEUE_TARGET - level) * DVHSTX_AUDIO_FRAMES_PER_PACKET;
+}
+
+size_t DVHSTXAudio::audioWrite(const int16_t *lr, size_t frames) {
+  if (!_audio_running)
+    return 0;
+  const bool in_hsync = hstx_di_queue_get_hsync_active();
+  size_t done = 0;
+  while (frames - done >= DVHSTX_AUDIO_FRAMES_PER_PACKET) {
+    audio_sample_t samples[DVHSTX_AUDIO_FRAMES_PER_PACKET];
+    for (int i = 0; i < DVHSTX_AUDIO_FRAMES_PER_PACKET; i++) {
+      samples[i].left = lr[(done + i) * 2];
+      samples[i].right = lr[(done + i) * 2 + 1];
+    }
+    hstx_packet_t packet;
+    int next = hstx_packet_set_audio_samples_cs_rate(
+        &packet, samples, DVHSTX_AUDIO_FRAMES_PER_PACKET, _audio_frame,
+        _audio_rate);
+    hstx_data_island_t island;
+    hstx_encode_data_island(&island, &packet, false, in_hsync);
+    if (!hstx_di_queue_push(&island))
+      break;
+    _audio_frame = next;
+    done += DVHSTX_AUDIO_FRAMES_PER_PACKET;
+  }
+  return done;
+}
+
+uint32_t DVHSTXAudio::audioUnderruns() {
+  return _audio_running ? hstx_di_queue_silence_count : 0;
+}
+
 int16_t dvhstx_width(DVHSTXResolution r) {
   switch (r) {
   default:

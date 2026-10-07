@@ -299,7 +299,7 @@ public:
     _audio_running = result && _audio_rate;
     if (!result)
       return false;
-    for (int i = 0; i < 255; i++) {
+    for (int i = 0; i < 256; i++) {
       uint8_t r = (i >> 6) * 255 / 3;
       uint8_t g = ((i >> 2) & 7) * 255 / 7;
       uint8_t b = (i & 3) * 255 / 3;

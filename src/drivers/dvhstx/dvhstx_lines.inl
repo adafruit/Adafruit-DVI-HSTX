@@ -17,7 +17,7 @@ void dvhstx_debug(const char *fmt, ...);
 #define dvhstx_debug printf
 #endif
 
-// If changing the font, note this code will not handle glyphs wider than 13 pixels
+// Glyph columns past 13 (box_w + ofs_x) are clipped
 #define FONT (&intel_one_mono)
 
 extern uint8_t color_lut[8];
@@ -35,7 +35,8 @@ static inline __attribute__((always_inline)) uint32_t render_char_line(int c, in
 
         uint32_t bits = (b[bi >> 2] << 24) | (b[(bi >> 2) + 1] << 16) | (b[(bi >> 2) + 2] << 8) | b[(bi >> 2) + 3];
         bits >>= 6 - ((bi & 3) << 1);
-        bits &= 0x3ffffff & (0x3ffffff << ((13 - g->box_w) << 1));
+        const int draw_w = g->box_w > 13 ? 13 : g->box_w;
+        bits &= 0x3ffffff & (0x3ffffff << ((13 - draw_w) << 1));
         bits >>= g->ofs_x << 1;
 
         return bits;

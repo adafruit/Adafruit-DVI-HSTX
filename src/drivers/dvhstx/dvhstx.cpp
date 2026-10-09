@@ -356,6 +356,24 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
 {
     if (inited) reset();
 
+    // HSTX outputs 0 through 7 appear on GPIO 12 through 19.
+    constexpr int HSTX_FIRST_PIN = 12;
+    // Each P pin's partner is P ^ 1.
+    const uint8_t pins[4] = {pinout.clk_p, pinout.rgb_p[0], pinout.rgb_p[1], pinout.rgb_p[2]};
+    uint32_t used = 0;
+    for (int i = 0; i < 4; ++i) {
+        if (pins[i] < HSTX_FIRST_PIN || pins[i] >= HSTX_FIRST_PIN + 8) {
+            dvhstx_debug("Pinout must use GPIO 12-19\n");
+            return false;
+        }
+        uint32_t pair = 1u << ((pins[i] - HSTX_FIRST_PIN) >> 1);
+        if (used & pair) {
+            dvhstx_debug("Pinout uses a pin pair twice\n");
+            return false;
+        }
+        used |= pair;
+    }
+
     cursor_y = -1;
     ch_num = 0;
     line_num = -1;
@@ -728,8 +746,6 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
         2u << HSTX_CTRL_CSR_SHIFT_LSB |
         HSTX_CTRL_CSR_EN_BITS; 
 
-    // HSTX outputs 0 through 7 appear on GPIO 12 through 19.
-    constexpr int HSTX_FIRST_PIN = 12;
     // Assign clock pair to two neighbouring pins:
     hstx_ctrl_hw->bit[(pinout.clk_p    ) - HSTX_FIRST_PIN] = HSTX_CTRL_BIT0_CLK_BITS;
     hstx_ctrl_hw->bit[(pinout.clk_p ^ 1) - HSTX_FIRST_PIN] = HSTX_CTRL_BIT0_CLK_BITS | HSTX_CTRL_BIT0_INV_BITS;

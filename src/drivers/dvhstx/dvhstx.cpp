@@ -159,7 +159,7 @@ void __scratch_x("display") DVHSTX::gfx_dma_handler() {
     }
 }
 
-void __scratch_x("display") dma_irq_handler_text() {
+void __not_in_flash_func(dma_irq_handler_text)() {
     display->text_dma_handler();
 }
 
@@ -182,7 +182,8 @@ uint8_t color_lut[8] = {
 #undef CLUT_ENTRY
 };
 
-void __scratch_x("display") DVHSTX::text_dma_handler() {
+// In main RAM, not scratch: scratch X also holds core 1's stack and is full.
+void __not_in_flash_func(DVHSTX::text_dma_handler)() {
     // ch_num indicates the channel that just finished, which is the one
     // we're about to reload.
     const uint32_t chained = prev_ch_mask;

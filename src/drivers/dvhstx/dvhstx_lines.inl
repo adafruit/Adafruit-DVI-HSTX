@@ -3,7 +3,7 @@
 #pragma once
 
 #include "dvhstx.hpp"
-#include "font.h"
+#include "font_cp437.h"
 
 #ifdef MICROPY_BUILD_TYPE
 extern "C" {
@@ -17,29 +17,16 @@ void dvhstx_debug(const char *fmt, ...);
 #define dvhstx_debug printf
 #endif
 
-// If changing the font, note this code will not handle glyphs wider than 13 pixels
-#define FONT (&intel_one_mono)
-
 extern uint8_t color_lut[8];
 
-static inline __attribute__((always_inline)) uint32_t render_char_line(int c, int y) {
-    if (c < 0x20 || c > 0x7e) return 0;
-    const lv_font_fmt_txt_glyph_dsc_t* g = &FONT->dsc->glyph_dsc[c - 0x20 + 1];
-    const uint8_t *b = FONT->dsc->glyph_bitmap + g->bitmap_index;
-    const int ey = y - FONT_HEIGHT + FONT->base_line + g->ofs_y + g->box_h;
-    if (ey < 0 || ey >= g->box_h || g->box_w == 0) {
-        return 0;
-    }
-    else {
-        int bi = (g->box_w * ey);
-
-        uint32_t bits = (b[bi >> 2] << 24) | (b[(bi >> 2) + 1] << 16) | (b[(bi >> 2) + 2] << 8) | b[(bi >> 2) + 3];
-        bits >>= 6 - ((bi & 3) << 1);
-        bits &= 0x3ffffff & (0x3ffffff << ((13 - g->box_w) << 1));
-        bits >>= g->ofs_x << 1;
-
-        return bits;
-    }
+// Row y of glyph c at 2 bits per pixel, leftmost of the 14 pixels in bits 27:26.
+static inline __attribute__((always_inline)) uint32_t render_char_line(uint8_t c, int y) {
+    uint32_t bits = font_cp437[c][y];
+    bits = (bits | (bits << 8)) & 0x00ff00ff;
+    bits = (bits | (bits << 4)) & 0x0f0f0f0f;
+    bits = (bits | (bits << 2)) & 0x33333333;
+    bits = (bits | (bits << 1)) & 0x55555555;
+    return bits * 3;
 }
 
 namespace pimoroni {
@@ -123,8 +110,7 @@ inline __attribute__((always_inline)) void DVHSTX::fill_text_line(uint32_t* line
         for (int i = 0; i < frame_width; i += 2) {
             uint32_t tmp_h, tmp_l;
 
-            uint8_t c = (*src_ptr++ - 0x20);
-            uint32_t bits = (c < 95) ? font_cache[c * 24 + char_y] : 0;
+            uint32_t bits = font_cache[*src_ptr++ * FONT_CP437_HEIGHT + char_y];
             uint8_t attr = *src_ptr++;
             uint32_t bg = color_lut[(attr >> 3) & 7];
             uint32_t colour = color_lut[attr & 7] ^ bg;
@@ -142,8 +128,7 @@ inline __attribute__((always_inline)) void DVHSTX::fill_text_line(uint32_t* line
                 break;
             }
 
-            c = (*src_ptr++ - 0x20);
-            bits = (c < 95) ? font_cache[c * 24 + char_y] : 0;
+            bits = font_cache[*src_ptr++ * FONT_CP437_HEIGHT + char_y];
             attr = *src_ptr++;
             if (attr & ATTR_LOW_INTEN) bits = bits & 0xaaaaaaaa;
             if ((attr & ATTR_V_LOW_INTEN) == ATTR_V_LOW_INTEN) bits >>= 1;
@@ -165,6 +150,7 @@ inline __attribute__((always_inline)) void DVHSTX::fill_text_line(uint32_t* line
         }
         if (y / 24 == cursor_y) {
             uint8_t* dst_ptr = (uint8_t*)line + 14 * cursor_x;
+            *dst_ptr++ ^= 0xff;
             *dst_ptr++ ^= 0xff;
             *dst_ptr++ ^= 0xff;
             *dst_ptr++ ^= 0xff;

@@ -599,32 +599,32 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
                 return ((b >> shift1) & 3) << shift2;
             };
             return
-                take( 0,  0) |
-                take( 2, 26) |
-                take( 4, 18) |
-                take( 6, 10) |
-                take( 8,  2) |
-                take(10, 28) |
-                take(12, 20) |
-                take(14, 12) |
-                take(16,  4) |
-                take(18, 30) |
-                take(20, 22) |
-                take(22, 14) |
-                take(24,  6) |
-                take(26, 28);
+                take( 0,  8) |
+                take( 2,  0) |
+                take( 4, 26) |
+                take( 6, 18) |
+                take( 8, 10) |
+                take(10,  2) |
+                take(12, 28) |
+                take(14, 20) |
+                take(16, 12) |
+                take(18,  4) |
+                take(20, 30) |
+                take(22, 22) |
+                take(24, 14) |
+                take(26,  6);
 
         };
         // Need to pre-render the font to RAM to be fast enough.
-        font_cache = (uint32_t*)malloc(4 * FONT->line_height * 96);
+        font_cache = (uint32_t*)malloc(4 * FONT_CP437_HEIGHT * 256);
         if (!font_cache) {
             dvhstx_debug("Not enough RAM for the font cache\n");
             free_buffers();
             return false;
         }
         uint32_t* font_cache_ptr = font_cache;
-        for (int c = 0x20; c < 128; ++c) {
-            for (int y = 0; y < FONT->line_height; ++y) {
+        for (int c = 0; c < 256; ++c) {
+            for (int y = 0; y < FONT_CP437_HEIGHT; ++y) {
                 *font_cache_ptr++ = scramble(render_char_line(c, y));
             }
         }
@@ -679,11 +679,11 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
         // Configure HSTX's TMDS encoder for 2bpp
         hstx_ctrl_hw->expand_tmds =
             1  << HSTX_CTRL_EXPAND_TMDS_L2_NBITS_LSB |
-            18 << HSTX_CTRL_EXPAND_TMDS_L2_ROT_LSB   |
+            20 << HSTX_CTRL_EXPAND_TMDS_L2_ROT_LSB   |
             1  << HSTX_CTRL_EXPAND_TMDS_L1_NBITS_LSB |
-            18  << HSTX_CTRL_EXPAND_TMDS_L1_ROT_LSB   |
+            20  << HSTX_CTRL_EXPAND_TMDS_L1_ROT_LSB   |
             1  << HSTX_CTRL_EXPAND_TMDS_L0_NBITS_LSB |
-            18  << HSTX_CTRL_EXPAND_TMDS_L0_ROT_LSB;
+            20  << HSTX_CTRL_EXPAND_TMDS_L0_ROT_LSB;
 
         // Pixels and control symbols (RAW) are an
         // entire 32-bit word.

@@ -82,6 +82,43 @@ inline __attribute__((always_inline)) void DVHSTX::fill_gfx_line(uint32_t* dst_p
             }
         }
     }
+    else if (mode == MODE_PALETTE1) {
+        const int src_bytes = timing_mode->h_active_pixels >> (h_repeat_shift + 3);
+        uint8_t* src_ptr = &frame_buffer_display[y * src_bytes];
+        // Pick palette[0] or [1] per bit without branching, MSB first.
+        const uint32_t c0 = display_palette[0];
+        const uint32_t diff = c0 ^ display_palette[1];
+        if (h_repeat_shift == 2) {
+            for (int i = 0; i < src_bytes; ++i) {
+                const uint32_t bits = *src_ptr++;
+                for (int b = 7; b >= 0; --b) {
+                    uint32_t val = c0 ^ (diff & -((bits >> b) & 1));
+                    *dst_ptr++ = val;
+                    *dst_ptr++ = val;
+                    *dst_ptr++ = val;
+                    *dst_ptr++ = val;
+                }
+            }
+        } else if (h_repeat_shift == 1) {
+            for (int i = 0; i < src_bytes; ++i) {
+                const uint32_t bits = *src_ptr++;
+#pragma GCC unroll 8
+                for (int b = 7; b >= 0; --b) {
+                    uint32_t val = c0 ^ (diff & -((bits >> b) & 1));
+                    *dst_ptr++ = val;
+                    *dst_ptr++ = val;
+                }
+            }
+        } else {
+            for (int i = 0; i < src_bytes; ++i) {
+                const uint32_t bits = *src_ptr++;
+#pragma GCC unroll 8
+                for (int b = 7; b >= 0; --b) {
+                    *dst_ptr++ = c0 ^ (diff & -((bits >> b) & 1));
+                }
+            }
+        }
+    }
     else if (line_bytes_per_pixel == 4) {
         uint8_t* src_ptr = &frame_buffer_display[y * (timing_mode->h_active_pixels >> h_repeat_shift)];
         if (h_repeat_shift == 2) {

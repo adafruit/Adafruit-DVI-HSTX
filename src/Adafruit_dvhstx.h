@@ -365,6 +365,101 @@ private:
   bool double_buffered;
 };
 
+/// A 1-bit, two-color canvas displaying to a DVI monitor
+class DVHSTX1 : public GFXcanvas1, public DVHSTXAudio {
+public:
+  /**************************************************************************/
+  /*!
+     @brief    Instantiate a DVHSTX 1-bit canvas context for graphics
+     @param    pinout Details of the HSTX pinout
+     @param    res   Display resolution
+     @param    double_buffered Whether to allocate two buffers
+  */
+  /**************************************************************************/
+  DVHSTX1(DVHSTXPinout pinout, DVHSTXResolution res,
+          bool double_buffered = false)
+      : GFXcanvas1(dvhstx_width(res), dvhstx_height(res), false),
+        pinout(pinout), res{res}, double_buffered{double_buffered} {}
+  ~DVHSTX1() { end(); }
+
+  /**************************************************************************/
+  /*!
+     @brief    Start the display, with color 0 black and color 1 white
+     @return   true if successful, false in case of error
+  */
+  /**************************************************************************/
+  bool begin() {
+    if (_audio_enable)
+      _audio_enable(hstx, _audio_rate);
+    _audio_frame = 0;
+    bool result =
+        hstx.init(dvhstx_width(res), dvhstx_height(res),
+                  pimoroni::DVHSTX::MODE_PALETTE1, double_buffered, pinout);
+    _audio_running = result && _audio_rate;
+    if (!result)
+      return false;
+    setColor(0, 0x000000);
+    setColor(1, 0xFFFFFF);
+    buffer = hstx.get_back_buffer<uint8_t>();
+    fillScreen(0);
+    return true;
+  }
+  /**************************************************************************/
+  /*!
+     @brief    Stop the display
+  */
+  /**************************************************************************/
+  void end() {
+    hstx.reset();
+    _audio_running = false;
+  }
+
+  /**************************************************************************/
+  /*!
+     @brief    Count the frames sent to the display
+     @return   Frames sent since begin()
+  */
+  /**************************************************************************/
+  uint32_t getFrameCount() const { return hstx.get_frame_count(); }
+
+  /**************************************************************************/
+  /*!
+     @brief    Set the color shown for pixel value 0 or 1
+     @param idx The pixel value, 0 or 1
+     @param r The input red value, 0 to 255
+     @param g The input green value, 0 to 255
+     @param b The input blue value, 0 to 255
+  */
+  /**************************************************************************/
+  void setColor(uint8_t idx, uint8_t r, uint8_t g, uint8_t b) {
+    hstx.get_palette()[idx] = (r << 16) | (g << 8) | b;
+  }
+  /**************************************************************************/
+  /*!
+     @brief    Set the color shown for pixel value 0 or 1
+     @param idx The pixel value, 0 or 1
+     @param rgb The 24-bit RGB value in the form 0x00RRGGBB
+  */
+  /**************************************************************************/
+  void setColor(uint8_t idx, uint32_t rgb) { hstx.get_palette()[idx] = rgb; }
+
+  /**********************************************************************/
+  /*!
+    @brief    If double-buffered, wait for retrace and swap buffers. Otherwise,
+    do nothing (returns immediately)
+    @param copy_framebuffer if true, copy the new screen to the new back buffer.
+    Otherwise, the content is undefined.
+  */
+  /**********************************************************************/
+  void swap(bool copy_framebuffer = false);
+
+private:
+  DVHSTXPinout pinout;
+  DVHSTXResolution res;
+  mutable pimoroni::DVHSTX hstx;
+  bool double_buffered;
+};
+
 /// DVI output drawn one line at a time by your callback, with no frame
 /// buffer. For emulators and other code that generates each line itself.
 class DVHSTXScanline : public DVHSTXAudio {

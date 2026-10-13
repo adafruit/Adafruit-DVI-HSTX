@@ -533,6 +533,11 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
         frame_bytes_per_pixel = 2;
         line_bytes_per_pixel = 14;
         break;
+    case MODE_PALETTE1:
+        // One bit per pixel; frame_bytes below accounts for it.
+        frame_bytes_per_pixel = 1;
+        line_bytes_per_pixel = 4;
+        break;
     default:
         dvhstx_debug("Unsupported mode %d", (int)mode);
         return false;
@@ -550,24 +555,28 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
     };
 
     if (!scanline_cb) {
+        // All widths are multiples of 8, so 1bpp rows are whole bytes.
+        const size_t frame_bytes = mode == MODE_PALETTE1
+            ? (size_t)(frame_width / 8) * frame_height
+            : (size_t)frame_width * frame_height * frame_bytes_per_pixel;
 #ifdef MICROPY_BUILD_TYPE
-        if (frame_width * frame_height * frame_bytes_per_pixel > sizeof(frame_buffer_a)) {
+        if (frame_bytes > sizeof(frame_buffer_a)) {
             panic("Frame buffer too large");
         }
 
         frame_buffer_display = frame_buffer_a;
         frame_buffer_back = double_buffered ? frame_buffer_b : frame_buffer_a;
 #else
-        frame_buffer_display = (uint8_t*)malloc(frame_width * frame_height * frame_bytes_per_pixel);
-        frame_buffer_back = double_buffered ? (uint8_t*)malloc(frame_width * frame_height * frame_bytes_per_pixel) : frame_buffer_display;
+        frame_buffer_display = (uint8_t*)malloc(frame_bytes);
+        frame_buffer_back = double_buffered ? (uint8_t*)malloc(frame_bytes) : frame_buffer_display;
         if (!frame_buffer_display || !frame_buffer_back) {
             dvhstx_debug("Not enough RAM for the frame buffer\n");
             free_buffers();
             return false;
         }
 #endif
-        memset(frame_buffer_display, 0, frame_width * frame_height * frame_bytes_per_pixel);
-        memset(frame_buffer_back, 0, frame_width * frame_height * frame_bytes_per_pixel);
+        memset(frame_buffer_display, 0, frame_bytes);
+        memset(frame_buffer_back, 0, frame_bytes);
     }
 
     memset(palette, 0, PALETTE_SIZE * sizeof(palette[0]));
@@ -657,6 +666,7 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
         break;
 
     case MODE_PALETTE:
+    case MODE_PALETTE1:
         // Configure HSTX's TMDS encoder for RGB888
         hstx_ctrl_hw->expand_tmds =
             7  << HSTX_CTRL_EXPAND_TMDS_L2_NBITS_LSB |

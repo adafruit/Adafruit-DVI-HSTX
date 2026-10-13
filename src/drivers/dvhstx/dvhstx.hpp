@@ -51,6 +51,7 @@ namespace pimoroni {
       MODE_RGB888 = 3,
       MODE_TEXT_MONO = 4,
       MODE_TEXT_RGB111 = 5,
+      MODE_PALETTE1 = 6,
     };
 
     enum TextColour {

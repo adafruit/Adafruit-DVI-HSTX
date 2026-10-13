@@ -182,8 +182,11 @@ static void __not_in_flash_func(dma_irq_handler_text_audio)() {
 // Each active line is two transfers, the header with its island and then the
 // pixels, so repeated lines can share one pixel buffer as without audio.
 void __not_in_flash_func(DVHSTX::gfx_audio_dma_handler)() {
+    // The channel that chains into the one reloaded below.
+    const uint32_t chained = prev_ch_mask;
     dma_channel_hw_t *ch = &dma_hw->ch[ch_num];
-    dma_hw->intr = 1u << ch_num;
+    prev_ch_mask = 1u << ch_num;
+    dma_hw->intr = prev_ch_mask;
     if (++ch_num == NUM_CHANS) ch_num = 0;
 
     const uint line_buf_total_len = ((timing_mode->h_active_pixels * line_bytes_per_pixel) >> 2) + line_header_words;
@@ -212,8 +215,17 @@ void __not_in_flash_func(DVHSTX::gfx_audio_dma_handler)() {
             ch->read_addr = (uintptr_t)di_active[ch_num];
             ch->transfer_count = di_active_len;
             pixels_pending = true;
+            if (dma_hw->intr & chained)
+                restart_stream();
             return;  // the line ends with its pixel transfer
         }
+    }
+
+    // If the channel that chains into ch has finished by now, ch may have
+    // run its old buffer before the reload went in. Start over.
+    if (dma_hw->intr & chained) {
+        restart_stream();
+        return;
     }
 
     if (++v_scanline == v_total_active_lines) {
@@ -231,10 +243,15 @@ void __not_in_flash_func(DVHSTX::gfx_audio_dma_handler)() {
 // Text lines are drawn into one buffer per channel already, so the header
 // with its island stays in front of the pixels: one transfer per line.
 void __not_in_flash_func(DVHSTX::text_audio_dma_handler)() {
+    // The channel that chains into the one reloaded below.
+    const uint32_t chained = prev_ch_mask;
     dma_channel_hw_t *ch = &dma_hw->ch[ch_num];
-    dma_hw->intr = 1u << ch_num;
+    prev_ch_mask = 1u << ch_num;
+    dma_hw->intr = prev_ch_mask;
     if (++ch_num == NUM_CHANS) ch_num = 0;
 
+    uint32_t* fill_dst = nullptr;
+    int fill_y = 0;
     hstx_di_queue_tick();
     if (v_scanline < v_inactive_total) {
         const bool vsync = v_scanline >= timing_mode->v_front_porch &&
@@ -248,8 +265,18 @@ void __not_in_flash_func(DVHSTX::text_audio_dma_handler)() {
         copy_di(&line[di_offset], di ? di : di_null);
         ch->read_addr = (uintptr_t)line;
         ch->transfer_count = line_buf_total_len;
-        fill_text_line(&line[line_header_words], y);
+        fill_dst = &line[line_header_words];
+        fill_y = y;
     }
+
+    // If the channel that chains into ch has finished by now, ch may have
+    // run its old buffer before the reload went in. Start over.
+    if (dma_hw->intr & chained) {
+        restart_stream();
+        return;
+    }
+
+    if (fill_dst) fill_text_line(fill_dst, fill_y);
 
     if (++v_scanline == v_total_active_lines) {
         v_scanline = 0;

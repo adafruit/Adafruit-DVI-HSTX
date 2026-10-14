@@ -459,6 +459,7 @@ int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class
 </dl>
 <p>Because this class is a subclass of Print, you can also use methods like print, println, and printf to write text.</p>
 <p>Text is written with the current attribute, and the screen automatically wraps and scrolls when needed.</p>
+<p>Bytes below 32, other than carriage return and newline, are ignored. Use drawPixel() to show glyphs 0 to 31.</p>
 <p>This function fails (returns 0) if the display was not successfully started with <a class="el" href="class_d_v_h_s_t_x_text.html#afb7935ef41a40afa41890180427045e9" title="Start the display. ">begin()</a>.</p>
 <dl class="section return"><dt>Returns</dt><dd>1 if the character is written, 0 if it was not </dd></dl>
 

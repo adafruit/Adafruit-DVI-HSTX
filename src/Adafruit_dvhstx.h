@@ -554,7 +554,7 @@ public:
     /**************************************************************************/
     /*!
        @brief    Create a cell object from an ASCII character and an attribute
-       @param    c ASCII character value. Glyphs from 32 to 126 inclusive are
+       @param    c Character value. All 256 code page 437 glyphs are
        available
        @param    attr Attribute value. Can be the logical OR of a text color, a
        background color, and an intensity flag
@@ -704,6 +704,9 @@ public:
 
      Text is written with the current attribute, and the screen automatically
      wraps and scrolls when needed.
+
+     Bytes below 32, other than carriage return and newline, are ignored.
+     Use drawPixel() to show glyphs 0 to 31.
 
      This function fails (returns 0) if the display was not successfully started
      with begin().

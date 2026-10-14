@@ -304,12 +304,28 @@ __attribute__((weak)) bool dvhstx_no_clock_setup = false;
 }
 
 #ifndef MICROPY_BUILD_TYPE
+#ifdef RP2350_PSRAM_CS
+#include <psram.h>
+extern uint8_t __psram_start__;
+#endif
+
 // Trigger clock setup early - on MicroPython this is done by a hook in main.
 namespace {
     class DV_preinit {
         public:
         DV_preinit() {
-            if (!dvhstx_no_clock_setup) display_setup_clock_preinit();
+            if (dvhstx_no_clock_setup) return;
+            display_setup_clock_preinit();
+#ifdef RP2350_PSRAM_CS
+            // The core set PSRAM timing for the old clk_sys. Recompute it,
+            // then make one PSRAM access so the new timing takes effect,
+            // as the core's main.cpp does when it changes clk_sys.
+            psram_reinit_timing();
+            volatile uint8_t *p = &__psram_start__;
+            *p ^= 0xff;
+            *p ^= 0xff;
+            asm volatile("" ::: "memory");
+#endif
         }
     };
     DV_preinit dv_preinit __attribute__ ((init_priority (101))) ;

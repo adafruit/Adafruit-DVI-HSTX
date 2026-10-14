@@ -140,6 +140,17 @@ void DVHSTX8::swap(bool copy_framebuffer) {
   }
   buffer = hstx.get_back_buffer<uint8_t>();
 }
+void DVHSTX1::swap(bool copy_framebuffer) {
+  if (!double_buffered) {
+    return;
+  }
+  hstx.flip_blocking();
+  if (copy_framebuffer) {
+    memcpy(hstx.get_front_buffer<uint8_t>(), hstx.get_back_buffer<uint8_t>(),
+           (WIDTH + 7) / 8 * HEIGHT);
+  }
+  buffer = hstx.get_back_buffer<uint8_t>();
+}
 void DVHSTXText::swap(bool copy_framebuffer) {
   if (!double_buffered) {
     return;

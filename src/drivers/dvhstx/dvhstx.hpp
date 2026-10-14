@@ -161,6 +161,7 @@ namespace pimoroni {
 
       void display_setup_clock();
       bool setup_audio(bool text, const uint32_t** header, uint* header_words);
+      void restart_stream();
       void fill_gfx_line(uint32_t* dst_ptr, int y);
       void fill_text_line(uint32_t* line, int y);
 
@@ -180,6 +181,8 @@ namespace pimoroni {
 
       // DMA scanline filling
       uint ch_num = 0;
+      // intr bit of the channel that chains into ch_num.
+      uint32_t prev_ch_mask = 0;
       int line_num = -1;
 
       volatile int v_scanline = 2;

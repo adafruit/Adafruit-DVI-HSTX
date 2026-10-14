@@ -13,6 +13,7 @@ extern "C" {
 #include "hardware/dma.h"
 #include "hardware/gpio.h"
 #include "hardware/irq.h"
+#include "hardware/resets.h"
 #include "hardware/structs/bus_ctrl.h"
 #include "hardware/structs/hstx_ctrl.h"
 #include "hardware/structs/hstx_fifo.h"
@@ -106,10 +107,14 @@ void __scratch_x("display") dma_irq_handler() {
 void __scratch_x("display") DVHSTX::gfx_dma_handler() {
     // ch_num indicates the channel that just finished, which is the one
     // we're about to reload.
+    const uint32_t chained = prev_ch_mask;
     dma_channel_hw_t *ch = &dma_hw->ch[ch_num];
-    dma_hw->intr = 1u << ch_num;
+    prev_ch_mask = 1u << ch_num;
+    dma_hw->intr = prev_ch_mask;
     if (++ch_num == NUM_CHANS) ch_num = 0;
 
+    uint32_t* fill_dst = nullptr;
+    int fill_y = 0;
     if (v_scanline >= timing_mode->v_front_porch && v_scanline < (timing_mode->v_front_porch + timing_mode->v_sync_width)) {
         ch->read_addr = (uintptr_t)vblank_line_vsync_on;
         ch->transfer_count = count_of(vblank_line_vsync_on);
@@ -124,15 +129,23 @@ void __scratch_x("display") DVHSTX::gfx_dma_handler() {
         ch->read_addr = (uintptr_t)&line_buffers[new_line_num * line_buf_total_len];
         ch->transfer_count = line_buf_total_len;
 
-        // Fill line buffer
         if (line_num != new_line_num)
         {
             line_num = new_line_num;
-            uint32_t* dst_ptr = &line_buffers[line_num * line_buf_total_len + count_of(vactive_line_header)];
-
-            fill_gfx_line(dst_ptr, y);
+            fill_dst = &line_buffers[line_num * line_buf_total_len + count_of(vactive_line_header)];
+            fill_y = y;
         }
     }
+
+    // If the channel that chains into ch has finished by now, ch may have
+    // run its old buffer before the reload went in. Start over.
+    if (dma_hw->intr & chained) {
+        restart_stream();
+        return;
+    }
+
+    // Fill line buffer
+    if (fill_dst) fill_gfx_line(fill_dst, fill_y);
 
     if (++v_scanline == v_total_active_lines) {
         v_scanline = 0;
@@ -146,7 +159,7 @@ void __scratch_x("display") DVHSTX::gfx_dma_handler() {
     }
 }
 
-void __scratch_x("display") dma_irq_handler_text() {
+void __not_in_flash_func(dma_irq_handler_text)() {
     display->text_dma_handler();
 }
 
@@ -169,13 +182,17 @@ uint8_t color_lut[8] = {
 #undef CLUT_ENTRY
 };
 
-void __scratch_x("display") DVHSTX::text_dma_handler() {
+// In main RAM, not scratch: scratch X also holds core 1's stack and is full.
+void __not_in_flash_func(DVHSTX::text_dma_handler)() {
     // ch_num indicates the channel that just finished, which is the one
     // we're about to reload.
+    const uint32_t chained = prev_ch_mask;
     dma_channel_hw_t *ch = &dma_hw->ch[ch_num];
-    dma_hw->intr = 1u << ch_num;
+    prev_ch_mask = 1u << ch_num;
+    dma_hw->intr = prev_ch_mask;
     if (++ch_num == NUM_CHANS) ch_num = 0;
 
+    const uint line_buf_total_len = (frame_width * line_bytes_per_pixel + 3) / 4 + count_of(vactive_text_line_header);
     if (v_scanline >= timing_mode->v_front_porch && v_scanline < (timing_mode->v_front_porch + timing_mode->v_sync_width)) {
         ch->read_addr = (uintptr_t)vblank_line_vsync_on;
         ch->transfer_count = count_of(vblank_line_vsync_on);
@@ -183,15 +200,20 @@ void __scratch_x("display") DVHSTX::text_dma_handler() {
         ch->read_addr = (uintptr_t)vblank_line_vsync_off;
         ch->transfer_count = count_of(vblank_line_vsync_off);
     } else {
-        const int y = (v_scanline - v_inactive_total);
-        const uint line_buf_total_len = (frame_width * line_bytes_per_pixel + 3) / 4 + count_of(vactive_text_line_header);
-
         ch->read_addr = (uintptr_t)&line_buffers[ch_num * line_buf_total_len];
         ch->transfer_count = line_buf_total_len;
-
-        // Fill line buffer
-        fill_text_line(&line_buffers[ch_num * line_buf_total_len + count_of(vactive_text_line_header)], y);
     }
+
+    // If the channel that chains into ch has finished by now, ch may have
+    // run its old buffer before the reload went in. Start over.
+    if (dma_hw->intr & chained) {
+        restart_stream();
+        return;
+    }
+
+    // Fill line buffer
+    if (v_scanline >= v_inactive_total)
+        fill_text_line(&line_buffers[ch_num * line_buf_total_len + count_of(vactive_text_line_header)], v_scanline - v_inactive_total);
 
     if (++v_scanline == v_total_active_lines) {
         v_scanline = 0;
@@ -203,6 +225,51 @@ void __scratch_x("display") DVHSTX::text_dma_handler() {
         }
         __sev();
     }
+}
+
+// Called from the DMA IRQ after it was held off too long (for example by
+// noInterrupts()) and a channel ran before it was reloaded. Without this the
+// stream stays out of step and the picture stays black. Starts the ring again
+// from the top of a frame, so the cost is a glitch.
+void __not_in_flash_func(DVHSTX::restart_stream)() {
+    const uint32_t mask = (1u << num_chans) - 1;
+    uint32_t ctrl[NUM_AUDIO_CHANS];
+    // RP2350-E5: clear EN on chained channels before aborting them.
+    for (int i = 0; i < num_chans; ++i) {
+        ctrl[i] = dma_hw->ch[i].al1_ctrl;
+        dma_hw->ch[i].al1_ctrl = ctrl[i] & ~DMA_CH0_CTRL_TRIG_EN_BITS;
+    }
+    dma_hw->abort = mask;
+    while (dma_hw->abort & mask) tight_loop_contents();
+
+    // Clearing EN leaves the FIFO and command expander as they were, so reset
+    // the HSTX to empty them and put its configuration back.
+    const uint32_t csr = hstx_ctrl_hw->csr;
+    const uint32_t expand_shift = hstx_ctrl_hw->expand_shift;
+    const uint32_t expand_tmds = hstx_ctrl_hw->expand_tmds;
+    uint32_t bits[8];
+    for (int i = 0; i < 8; ++i) bits[i] = hstx_ctrl_hw->bit[i];
+    reset_block_num(RESET_HSTX);
+    unreset_block_num_wait_blocking(RESET_HSTX);
+    for (int i = 0; i < 8; ++i) hstx_ctrl_hw->bit[i] = bits[i];
+    hstx_ctrl_hw->expand_shift = expand_shift;
+    hstx_ctrl_hw->expand_tmds = expand_tmds;
+    hstx_ctrl_hw->csr = csr;
+
+    // Same start as init().
+    for (int i = 0; i < num_chans; ++i) {
+        dma_hw->ch[i].read_addr = (uintptr_t)vblank_line_vsync_off;
+        dma_hw->ch[i].transfer_count = count_of(vblank_line_vsync_off);
+        dma_hw->ch[i].al1_ctrl = ctrl[i];
+    }
+    ch_num = 0;
+    prev_ch_mask = 1u << (num_chans - 1);
+    line_num = -1;
+    v_scanline = 2;
+    pixels_pending = false;
+    dma_hw->intr = mask;
+    irq_clear(DMA_IRQ_2);
+    dma_channel_start(0);
 }
 
 // ----------------------------------------------------------------------------
@@ -838,6 +905,7 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
     irq_set_priority(DMA_IRQ_2, PICO_HIGHEST_IRQ_PRIORITY);
     irq_set_enabled(DMA_IRQ_2, true);
 
+    prev_ch_mask = 1u << (num_chans - 1);
     dma_channel_start(0);
 
     dvhstx_debug("DVHSTX started\n");

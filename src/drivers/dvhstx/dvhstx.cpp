@@ -435,6 +435,13 @@ DVHSTX::DVHSTX()
     dma_claim_mask((1 << NUM_CHANS) - 1);
 }
 
+DVHSTX::~DVHSTX()
+{
+    reset();
+    for (int i = 0; i < NUM_CHANS; ++i)
+        dma_channel_unclaim(i);
+}
+
 bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffered, const DVHSTXPinout &pinout)
 {
     if (inited) reset();
@@ -938,6 +945,9 @@ void DVHSTX::reset() {
 
     irq_set_enabled(DMA_IRQ_2, false);
     irq_remove_handler(DMA_IRQ_2, irq_get_exclusive_handler(DMA_IRQ_2));
+
+    if (display == this)
+        display = nullptr;
 
     for (int i = 0; i < num_chans; ++i)
         dma_channel_abort(i);

@@ -225,6 +225,7 @@ public:
   /**************************************************************************/
   void end() {
     hstx.reset();
+    buffer = nullptr;
     _audio_running = false;
   }
 
@@ -316,6 +317,7 @@ public:
   /**************************************************************************/
   void end() {
     hstx.reset();
+    buffer = nullptr;
     _audio_running = false;
   }
 
@@ -411,6 +413,7 @@ public:
   /**************************************************************************/
   void end() {
     hstx.reset();
+    buffer = nullptr;
     _audio_running = false;
   }
 
@@ -608,6 +611,7 @@ public:
   /**************************************************************************/
   void end() {
     hstx.reset();
+    buffer = nullptr;
     _audio_running = false;
   }
 

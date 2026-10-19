@@ -2,7 +2,7 @@
 #include <pico/stdlib.h>
 
 #if F_CPU != 150000000
-#error "Adafruit_DVHSTX controls overclocking (setting CPU frequency to 264MHz). However, the Tools > CPU Speed selector *MUST* be set to 150MHz"
+#error "Adafruit_DVHSTX controls overclocking (setting CPU frequency to 240MHz). However, the Tools > CPU Speed selector *MUST* be set to 150MHz"
 #endif
 
 extern "C" {
@@ -13,6 +13,7 @@ extern "C" {
 #include "hardware/dma.h"
 #include "hardware/gpio.h"
 #include "hardware/irq.h"
+#include "hardware/resets.h"
 #include "hardware/structs/bus_ctrl.h"
 #include "hardware/structs/hstx_ctrl.h"
 #include "hardware/structs/hstx_fifo.h"
@@ -26,6 +27,7 @@ extern "C" {
 
 #include "dvi.hpp"
 #include "dvhstx.hpp"
+#include "dvhstx_lines.inl"
 
 using namespace pimoroni;
 
@@ -34,44 +36,6 @@ using namespace pimoroni;
 __attribute__((section(".uninitialized_data"))) static uint8_t frame_buffer_a[FRAME_BUFFER_SIZE];
 __attribute__((section(".uninitialized_data"))) static uint8_t frame_buffer_b[FRAME_BUFFER_SIZE];
 #endif
-
-#include "font.h"
-
-// If changing the font, note this code will not handle glyphs wider than 13 pixels
-#define FONT (&intel_one_mono)
-
-#ifdef MICROPY_BUILD_TYPE
-extern "C" {
-void dvhstx_debug(const char *fmt, ...);
-}
-#elif defined(ARDUINO)
-#include <Arduino.h>
-// #define dvhstx_debug Serial.printf
-#define dvhstx_debug(...) ((void)0)
-#else
-#include <cstdio>
-#define dvhstx_debug printf
-#endif
-
-static inline __attribute__((always_inline)) uint32_t render_char_line(int c, int y) {
-    if (c < 0x20 || c > 0x7e) return 0;
-    const lv_font_fmt_txt_glyph_dsc_t* g = &FONT->dsc->glyph_dsc[c - 0x20 + 1];
-    const uint8_t *b = FONT->dsc->glyph_bitmap + g->bitmap_index;
-    const int ey = y - FONT_HEIGHT + FONT->base_line + g->ofs_y + g->box_h;
-    if (ey < 0 || ey >= g->box_h || g->box_w == 0) {
-        return 0;
-    }
-    else {
-        int bi = (g->box_w * ey);
-
-        uint32_t bits = (b[bi >> 2] << 24) | (b[(bi >> 2) + 1] << 16) | (b[(bi >> 2) + 2] << 8) | b[(bi >> 2) + 3];
-        bits >>= 6 - ((bi & 3) << 1);
-        bits &= 0x3ffffff & (0x3ffffff << ((13 - g->box_w) << 1));
-        bits >>= g->ofs_x << 1;
-
-        return bits;
-    }
-}
 
 // ----------------------------------------------------------------------------
 // HSTX command lists
@@ -143,10 +107,14 @@ void __scratch_x("display") dma_irq_handler() {
 void __scratch_x("display") DVHSTX::gfx_dma_handler() {
     // ch_num indicates the channel that just finished, which is the one
     // we're about to reload.
+    const uint32_t chained = prev_ch_mask;
     dma_channel_hw_t *ch = &dma_hw->ch[ch_num];
-    dma_hw->intr = 1u << ch_num;
+    prev_ch_mask = 1u << ch_num;
+    dma_hw->intr = prev_ch_mask;
     if (++ch_num == NUM_CHANS) ch_num = 0;
 
+    uint32_t* fill_dst = nullptr;
+    int fill_y = 0;
     if (v_scanline >= timing_mode->v_front_porch && v_scanline < (timing_mode->v_front_porch + timing_mode->v_sync_width)) {
         ch->read_addr = (uintptr_t)vblank_line_vsync_on;
         ch->transfer_count = count_of(vblank_line_vsync_on);
@@ -161,73 +129,28 @@ void __scratch_x("display") DVHSTX::gfx_dma_handler() {
         ch->read_addr = (uintptr_t)&line_buffers[new_line_num * line_buf_total_len];
         ch->transfer_count = line_buf_total_len;
 
-        // Fill line buffer
         if (line_num != new_line_num)
         {
             line_num = new_line_num;
-            uint32_t* dst_ptr = &line_buffers[line_num * line_buf_total_len + count_of(vactive_line_header)];
-
-            if (line_bytes_per_pixel == 2) {
-                uint16_t* src_ptr = (uint16_t*)&frame_buffer_display[y * 2 * (timing_mode->h_active_pixels >> h_repeat_shift)];
-                if (h_repeat_shift == 2) {
-                    for (int i = 0; i < timing_mode->h_active_pixels >> 1; i += 2) {
-                        uint32_t val = (uint32_t)(*src_ptr++) * 0x10001;
-                        *dst_ptr++ = val;
-                        *dst_ptr++ = val;
-                    }
-                }
-                else {
-                    for (int i = 0; i < timing_mode->h_active_pixels >> 1; ++i) {
-                        uint32_t val = (uint32_t)(*src_ptr++) * 0x10001;
-                        *dst_ptr++ = val;
-                    }
-                }
-            }
-            else if (line_bytes_per_pixel == 1) {
-                uint8_t* src_ptr = &frame_buffer_display[y * (timing_mode->h_active_pixels >> h_repeat_shift)];
-                if (h_repeat_shift == 2) {
-                    for (int i = 0; i < timing_mode->h_active_pixels >> 2; ++i) {
-                        uint32_t val = (uint32_t)(*src_ptr++) * 0x01010101;
-                        *dst_ptr++ = val;
-                    }                
-                }
-                else {
-                    for (int i = 0; i < timing_mode->h_active_pixels >> 2; ++i) {
-                        uint32_t val = ((uint32_t)(*src_ptr++) * 0x0101);
-                        val |= ((uint32_t)(*src_ptr++) * 0x01010000);
-                        *dst_ptr++ = val;
-                    }
-                }
-            }
-            else if (line_bytes_per_pixel == 4) {
-                uint8_t* src_ptr = &frame_buffer_display[y * (timing_mode->h_active_pixels >> h_repeat_shift)];
-                if (h_repeat_shift == 2) {
-                    for (int i = 0; i < timing_mode->h_active_pixels; i += 4) {
-                        uint32_t val = display_palette[*src_ptr++];
-                        *dst_ptr++ = val;
-                        *dst_ptr++ = val;
-                        *dst_ptr++ = val;
-                        *dst_ptr++ = val;
-                    }
-                } else if (h_repeat_shift == 1) {
-                    for (int i = 0; i < timing_mode->h_active_pixels; i += 2) {
-                        uint32_t val = display_palette[*src_ptr++];
-                        *dst_ptr++ = val;
-                        *dst_ptr++ = val;
-                    }
-                } else {
-                    for (int i = 0; i < timing_mode->h_active_pixels; i += 1) {
-                        uint32_t val = display_palette[*src_ptr++];
-                        *dst_ptr++ = val;
-                    }
-                }
-            }
+            fill_dst = &line_buffers[line_num * line_buf_total_len + count_of(vactive_line_header)];
+            fill_y = y;
         }
     }
+
+    // If the channel that chains into ch has finished by now, ch may have
+    // run its old buffer before the reload went in. Start over.
+    if (dma_hw->intr & chained) {
+        restart_stream();
+        return;
+    }
+
+    // Fill line buffer
+    if (fill_dst) fill_gfx_line(fill_dst, fill_y);
 
     if (++v_scanline == v_total_active_lines) {
         v_scanline = 0;
         line_num = -1;
+        frame_count++;
         if (flip_next) {
             flip_next = false;
             display->flip_now();
@@ -236,7 +159,7 @@ void __scratch_x("display") DVHSTX::gfx_dma_handler() {
     }
 }
 
-void __scratch_x("display") dma_irq_handler_text() {
+void __not_in_flash_func(dma_irq_handler_text)() {
     display->text_dma_handler();
 }
 
@@ -259,13 +182,17 @@ uint8_t color_lut[8] = {
 #undef CLUT_ENTRY
 };
 
-void __scratch_x("display") DVHSTX::text_dma_handler() {
+// In main RAM, not scratch: scratch X also holds core 1's stack and is full.
+void __not_in_flash_func(DVHSTX::text_dma_handler)() {
     // ch_num indicates the channel that just finished, which is the one
     // we're about to reload.
+    const uint32_t chained = prev_ch_mask;
     dma_channel_hw_t *ch = &dma_hw->ch[ch_num];
-    dma_hw->intr = 1u << ch_num;
+    prev_ch_mask = 1u << ch_num;
+    dma_hw->intr = prev_ch_mask;
     if (++ch_num == NUM_CHANS) ch_num = 0;
 
+    const uint line_buf_total_len = (frame_width * line_bytes_per_pixel + 3) / 4 + count_of(vactive_text_line_header);
     if (v_scanline >= timing_mode->v_front_porch && v_scanline < (timing_mode->v_front_porch + timing_mode->v_sync_width)) {
         ch->read_addr = (uintptr_t)vblank_line_vsync_on;
         ch->transfer_count = count_of(vblank_line_vsync_on);
@@ -273,95 +200,76 @@ void __scratch_x("display") DVHSTX::text_dma_handler() {
         ch->read_addr = (uintptr_t)vblank_line_vsync_off;
         ch->transfer_count = count_of(vblank_line_vsync_off);
     } else {
-        const int y = (v_scanline - v_inactive_total);
-        const uint line_buf_total_len = (frame_width * line_bytes_per_pixel + 3) / 4 + count_of(vactive_text_line_header);
-
         ch->read_addr = (uintptr_t)&line_buffers[ch_num * line_buf_total_len];
         ch->transfer_count = line_buf_total_len;
-
-        // Fill line buffer
-        int char_y = y % 24;
-        if (line_bytes_per_pixel == 4) {
-            uint32_t* dst_ptr = &line_buffers[ch_num * line_buf_total_len + count_of(vactive_text_line_header)];
-            uint8_t* src_ptr = &frame_buffer_display[(y / 24) * frame_width];
-            for (int i = 0; i < frame_width; ++i) {
-                *dst_ptr++ = render_char_line(*src_ptr++, char_y);
-            }
-        }
-        else {
-            uint8_t* src_ptr = &frame_buffer_display[(y / 24) * frame_width * 2];
-            uint32_t* dst_ptr = &line_buffers[ch_num * line_buf_total_len + count_of(vactive_text_line_header)];
-            for (int i = 0; i < frame_width; i += 2) {
-                uint32_t tmp_h, tmp_l;
-                
-                uint8_t c = (*src_ptr++ - 0x20);
-                uint32_t bits = (c < 95) ? font_cache[c * 24 + char_y] : 0;
-                uint8_t attr = *src_ptr++;
-                uint32_t bg = color_lut[(attr >> 3) & 7];
-                uint32_t colour = color_lut[attr & 7] ^ bg;
-                uint32_t bg_xor = bg * 0x3030303;
-                if (attr & ATTR_LOW_INTEN) bits = bits & 0xaaaaaaaa;
-                if ((attr & ATTR_V_LOW_INTEN) == ATTR_V_LOW_INTEN) bits >>= 1;
-
-                *dst_ptr++ = colour * ((bits >> 6) & 0x3030303) ^ bg_xor;
-                *dst_ptr++ = colour * ((bits >> 4) & 0x3030303) ^ bg_xor;
-                *dst_ptr++ = colour * ((bits >> 2) & 0x3030303) ^ bg_xor;
-                tmp_l = colour * ((bits >> 0) & 0x3030303) ^ bg_xor;
-
-                if (i == frame_width - 1) {
-                    *dst_ptr++ = tmp_l;
-                    break;
-                }
-           
-                c = (*src_ptr++ - 0x20);
-                bits = (c < 95) ? font_cache[c * 24 + char_y] : 0;
-                attr = *src_ptr++;
-                if (attr & ATTR_LOW_INTEN) bits = bits & 0xaaaaaaaa;
-                if ((attr & ATTR_V_LOW_INTEN) == ATTR_V_LOW_INTEN) bits >>= 1;
-                bg = color_lut[(attr >> 3) & 7] ;
-                colour = color_lut[attr & 7] ^ bg;
-                bg_xor = bg * 0x3030303;
-
-                tmp_h = colour * ((bits >> 6) & 0x3030303) ^ bg_xor;
-                *dst_ptr++ = (tmp_l & 0xffff) | (tmp_h << 16);
-                tmp_l = tmp_h >> 16;
-                tmp_h = colour * ((bits >> 4) & 0x3030303) ^ bg_xor;
-                *dst_ptr++ = (tmp_l & 0xffff) | (tmp_h << 16);
-                tmp_l = tmp_h >> 16;
-                tmp_h = colour * ((bits >> 2) & 0x3030303) ^ bg_xor;
-                *dst_ptr++ = (tmp_l & 0xffff) | (tmp_h << 16);
-                tmp_l = tmp_h >> 16;
-                tmp_h = colour * ((bits >> 0) & 0x3030303) ^ bg_xor;
-                *dst_ptr++ = (tmp_l & 0xffff) | (tmp_h << 16);
-            }
-            if (y / 24 == cursor_y) {
-                uint8_t* dst_ptr = (uint8_t*)&line_buffers[ch_num * line_buf_total_len + count_of(vactive_text_line_header)] + 14 * cursor_x;
-                *dst_ptr++ ^= 0xff;
-                *dst_ptr++ ^= 0xff;
-                *dst_ptr++ ^= 0xff;
-                *dst_ptr++ ^= 0xff;
-                *dst_ptr++ ^= 0xff;
-                *dst_ptr++ ^= 0xff;
-                *dst_ptr++ ^= 0xff;
-                *dst_ptr++ ^= 0xff;
-                *dst_ptr++ ^= 0xff;
-                *dst_ptr++ ^= 0xff;
-                *dst_ptr++ ^= 0xff;
-                *dst_ptr++ ^= 0xff;
-                *dst_ptr++ ^= 0xff;
-            }
-        }
     }
+
+    // If the channel that chains into ch has finished by now, ch may have
+    // run its old buffer before the reload went in. Start over.
+    if (dma_hw->intr & chained) {
+        restart_stream();
+        return;
+    }
+
+    // Fill line buffer
+    if (v_scanline >= v_inactive_total)
+        fill_text_line(&line_buffers[ch_num * line_buf_total_len + count_of(vactive_text_line_header)], v_scanline - v_inactive_total);
 
     if (++v_scanline == v_total_active_lines) {
         v_scanline = 0;
         line_num = -1;
+        frame_count++;
         if (flip_next) {
             flip_next = false;
             display->flip_now();
         }
         __sev();
     }
+}
+
+// Called from the DMA IRQ after it was held off too long (for example by
+// noInterrupts()) and a channel ran before it was reloaded. Without this the
+// stream stays out of step and the picture stays black. Starts the ring again
+// from the top of a frame, so the cost is a glitch.
+void __not_in_flash_func(DVHSTX::restart_stream)() {
+    const uint32_t mask = (1u << num_chans) - 1;
+    uint32_t ctrl[NUM_AUDIO_CHANS];
+    // RP2350-E5: clear EN on chained channels before aborting them.
+    for (int i = 0; i < num_chans; ++i) {
+        ctrl[i] = dma_hw->ch[i].al1_ctrl;
+        dma_hw->ch[i].al1_ctrl = ctrl[i] & ~DMA_CH0_CTRL_TRIG_EN_BITS;
+    }
+    dma_hw->abort = mask;
+    while (dma_hw->abort & mask) tight_loop_contents();
+
+    // Clearing EN leaves the FIFO and command expander as they were, so reset
+    // the HSTX to empty them and put its configuration back.
+    const uint32_t csr = hstx_ctrl_hw->csr;
+    const uint32_t expand_shift = hstx_ctrl_hw->expand_shift;
+    const uint32_t expand_tmds = hstx_ctrl_hw->expand_tmds;
+    uint32_t bits[8];
+    for (int i = 0; i < 8; ++i) bits[i] = hstx_ctrl_hw->bit[i];
+    reset_block_num(RESET_HSTX);
+    unreset_block_num_wait_blocking(RESET_HSTX);
+    for (int i = 0; i < 8; ++i) hstx_ctrl_hw->bit[i] = bits[i];
+    hstx_ctrl_hw->expand_shift = expand_shift;
+    hstx_ctrl_hw->expand_tmds = expand_tmds;
+    hstx_ctrl_hw->csr = csr;
+
+    // Same start as init().
+    for (int i = 0; i < num_chans; ++i) {
+        dma_hw->ch[i].read_addr = (uintptr_t)vblank_line_vsync_off;
+        dma_hw->ch[i].transfer_count = count_of(vblank_line_vsync_off);
+        dma_hw->ch[i].al1_ctrl = ctrl[i];
+    }
+    ch_num = 0;
+    prev_ch_mask = 1u << (num_chans - 1);
+    line_num = -1;
+    v_scanline = 2;
+    pixels_pending = false;
+    dma_hw->intr = mask;
+    irq_clear(DMA_IRQ_2);
+    dma_channel_start(0);
 }
 
 // ----------------------------------------------------------------------------
@@ -455,13 +363,36 @@ extern "C" void __no_inline_not_in_flash_func(display_setup_clock_preinit)() {
     restore_interrupts(intr_stash);
 }
 
+// Set true (by defining DVHSTX_NO_CLOCK_SETUP before including
+// Adafruit_dvhstx.h) when the sketch owns clk_sys. The library then skips the
+// preinit and runs HSTX from clk_sys / 2, which must be twice the mode's clock.
+extern "C" {
+__attribute__((weak)) bool dvhstx_no_clock_setup = false;
+}
+
 #ifndef MICROPY_BUILD_TYPE
+#ifdef RP2350_PSRAM_CS
+#include <psram.h>
+extern uint8_t __psram_start__;
+#endif
+
 // Trigger clock setup early - on MicroPython this is done by a hook in main.
 namespace {
     class DV_preinit {
         public:
         DV_preinit() {
+            if (dvhstx_no_clock_setup) return;
             display_setup_clock_preinit();
+#ifdef RP2350_PSRAM_CS
+            // The core set PSRAM timing for the old clk_sys. Recompute it,
+            // then make one PSRAM access so the new timing takes effect,
+            // as the core's main.cpp does when it changes clk_sys.
+            psram_reinit_timing();
+            volatile uint8_t *p = &__psram_start__;
+            *p ^= 0xff;
+            *p ^= 0xff;
+            asm volatile("" ::: "memory");
+#endif
         }
     };
     DV_preinit dv_preinit __attribute__ ((init_priority (101))) ;
@@ -470,6 +401,14 @@ namespace {
 
 void DVHSTX::display_setup_clock() {
     const uint32_t dvi_clock_khz = timing_mode->bit_clk_khz >> 1;
+    if (dvhstx_no_clock_setup) {
+        // init() already checked clk_sys is exactly twice the HSTX clock
+        clock_configure_int_divider(clk_hstx,
+                                    0,
+                                    CLOCKS_CLK_HSTX_CTRL_AUXSRC_VALUE_CLK_SYS,
+                                    clock_get_hz(clk_sys), 2);
+        return;
+    }
     uint vco_freq, post_div1, post_div2;
     if (!check_sys_clock_khz(dvi_clock_khz, &vco_freq, &post_div1, &post_div2))
         panic("System clock of %u kHz cannot be exactly achieved", dvi_clock_khz);
@@ -507,11 +446,30 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
 {
     if (inited) reset();
 
+    // HSTX outputs 0 through 7 appear on GPIO 12 through 19.
+    constexpr int HSTX_FIRST_PIN = 12;
+    // Each P pin's partner is P ^ 1.
+    const uint8_t pins[4] = {pinout.clk_p, pinout.rgb_p[0], pinout.rgb_p[1], pinout.rgb_p[2]};
+    uint32_t used = 0;
+    for (int i = 0; i < 4; ++i) {
+        if (pins[i] < HSTX_FIRST_PIN || pins[i] >= HSTX_FIRST_PIN + 8) {
+            dvhstx_debug("Pinout must use GPIO 12-19\n");
+            return false;
+        }
+        uint32_t pair = 1u << ((pins[i] - HSTX_FIRST_PIN) >> 1);
+        if (used & pair) {
+            dvhstx_debug("Pinout uses a pin pair twice\n");
+            return false;
+        }
+        used |= pair;
+    }
+
     cursor_y = -1;
     ch_num = 0;
     line_num = -1;
     v_scanline = 2;
     flip_next = false;
+    frame_count = 0;
 
     display_width = width;
     display_height = height;
@@ -589,6 +547,24 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
         return false;
     }
 
+    if (dvhstx_no_clock_setup &&
+        clock_get_hz(clk_sys) != (timing_mode->bit_clk_khz >> 1) * 2000u) {
+        dvhstx_debug("clk_sys must be twice the HSTX clock for this mode\n");
+        return false;
+    }
+
+    if (scanline_cb) {
+        if (mode != MODE_RGB565) {
+            dvhstx_debug("Scanline callbacks need MODE_RGB565\n");
+            return false;
+        }
+        // The callback draws whole output lines.
+        h_repeat_shift = 0;
+        v_repeat_shift = 0;
+        frame_width = display_width = timing_mode->h_active_pixels;
+        frame_height = display_height = timing_mode->v_active_lines;
+    }
+
     display = this;
     display_palette = get_palette();
     
@@ -627,6 +603,23 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
     vactive_text_line_header[4] |= timing_mode->h_back_porch;
     vactive_text_line_header[7+6] |= timing_mode->h_active_pixels - 6;
 
+    const bool is_text_mode = (mode == MODE_TEXT_MONO || mode == MODE_TEXT_RGB111);
+    const uint32_t* line_header = is_text_mode ? vactive_text_line_header : vactive_line_header;
+    line_header_words = is_text_mode ? count_of(vactive_text_line_header) : count_of(vactive_line_header);
+    audio_on = false;
+    pixels_pending = false;
+    num_chans = NUM_CHANS;
+    if (audio_sample_rate) {
+        if (!audio_chan_claimed && dma_channel_is_claimed(NUM_AUDIO_CHANS - 1)) {
+            dvhstx_debug("DMA channel %d is in use\n", NUM_AUDIO_CHANS - 1);
+            return false;
+        }
+        if (!(this->*audio_setup)(is_text_mode, &line_header, &line_header_words))
+            return false;
+        audio_on = true;
+        num_chans = NUM_AUDIO_CHANS;
+    }
+
     switch (mode) {
     case MODE_RGB565:
         frame_bytes_per_pixel = 2;
@@ -648,40 +641,73 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
         frame_bytes_per_pixel = 2;
         line_bytes_per_pixel = 14;
         break;
+    case MODE_PALETTE1:
+        // One bit per pixel; frame_bytes below accounts for it.
+        frame_bytes_per_pixel = 1;
+        line_bytes_per_pixel = 4;
+        break;
     default:
         dvhstx_debug("Unsupported mode %d", (int)mode);
         return false;
     }
 
-#ifdef MICROPY_BUILD_TYPE
-    if (frame_width * frame_height * frame_bytes_per_pixel > sizeof(frame_buffer_a)) {
-        panic("Frame buffer too large");
-    }
-
-    frame_buffer_display = frame_buffer_a;
-    frame_buffer_back = double_buffered ? frame_buffer_b : frame_buffer_a;
-#else
-    frame_buffer_display = (uint8_t*)malloc(frame_width * frame_height * frame_bytes_per_pixel);
-    frame_buffer_back = double_buffered ? (uint8_t*)malloc(frame_width * frame_height * frame_bytes_per_pixel) : frame_buffer_display;
+    line_buffers = nullptr;
+    auto free_buffers = [this]() {
+        free(line_buffers);
+        line_buffers = nullptr;
+#ifndef MICROPY_BUILD_TYPE
+        free(frame_buffer_display);
+        if (frame_buffer_back != frame_buffer_display) free(frame_buffer_back);
+        frame_buffer_display = frame_buffer_back = nullptr;
 #endif
-    memset(frame_buffer_display, 0, frame_width * frame_height * frame_bytes_per_pixel);
-    memset(frame_buffer_back, 0, frame_width * frame_height * frame_bytes_per_pixel);
+    };
+
+    if (!scanline_cb) {
+        // All widths are multiples of 8, so 1bpp rows are whole bytes.
+        const size_t frame_bytes = mode == MODE_PALETTE1
+            ? (size_t)(frame_width / 8) * frame_height
+            : (size_t)frame_width * frame_height * frame_bytes_per_pixel;
+#ifdef MICROPY_BUILD_TYPE
+        if (frame_bytes > sizeof(frame_buffer_a)) {
+            panic("Frame buffer too large");
+        }
+
+        frame_buffer_display = frame_buffer_a;
+        frame_buffer_back = double_buffered ? frame_buffer_b : frame_buffer_a;
+#else
+        frame_buffer_display = (uint8_t*)malloc(frame_bytes);
+        frame_buffer_back = double_buffered ? (uint8_t*)malloc(frame_bytes) : frame_buffer_display;
+        if (!frame_buffer_display || !frame_buffer_back) {
+            dvhstx_debug("Not enough RAM for the frame buffer\n");
+            free_buffers();
+            return false;
+        }
+#endif
+        memset(frame_buffer_display, 0, frame_bytes);
+        memset(frame_buffer_back, 0, frame_bytes);
+    }
 
     memset(palette, 0, PALETTE_SIZE * sizeof(palette[0]));
 
     frame_buffer_display = frame_buffer_display;
     dvhstx_debug("Frame buffers inited\n");
 
-    const bool is_text_mode = (mode == MODE_TEXT_MONO || mode == MODE_TEXT_RGB111);
     const int frame_pixel_words = (frame_width * h_repeat * line_bytes_per_pixel + 3) >> 2;
-    const int frame_line_words = frame_pixel_words + (is_text_mode ? count_of(vactive_text_line_header) : count_of(vactive_line_header));
-    const int frame_lines = (v_repeat == 1) ? NUM_CHANS : NUM_FRAME_LINES;
+    const int frame_line_words = frame_pixel_words + line_header_words;
+    // With audio, text lines use one buffer per channel and graphics lines
+    // three (see dvhstx_audio.cpp).
+    const int frame_lines = audio_on ? (is_text_mode ? num_chans : 3)
+                          : (v_repeat == 1) ? NUM_CHANS : NUM_FRAME_LINES;
     line_buffers = (uint32_t*)malloc(frame_line_words * 4 * frame_lines);
+    if (!line_buffers) {
+        dvhstx_debug("Not enough RAM for the line buffers\n");
+        free_buffers();
+        return false;
+    }
 
     for (int i = 0; i < frame_lines; ++i)
     {
-        if (is_text_mode) memcpy(&line_buffers[i * frame_line_words], vactive_text_line_header, count_of(vactive_text_line_header) * sizeof(uint32_t));
-        else memcpy(&line_buffers[i * frame_line_words], vactive_line_header, count_of(vactive_line_header) * sizeof(uint32_t));
+        memcpy(&line_buffers[i * frame_line_words], line_header, line_header_words * sizeof(uint32_t));
     }
 
     if (mode == MODE_TEXT_RGB111) {
@@ -690,27 +716,32 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
                 return ((b >> shift1) & 3) << shift2;
             };
             return
-                take( 0,  0) |
-                take( 2, 26) |
-                take( 4, 18) |
-                take( 6, 10) |
-                take( 8,  2) |
-                take(10, 28) |
-                take(12, 20) |
-                take(14, 12) |
-                take(16,  4) |
-                take(18, 30) |
-                take(20, 22) |
-                take(22, 14) |
-                take(24,  6) |
-                take(26, 28);
+                take( 0,  8) |
+                take( 2,  0) |
+                take( 4, 26) |
+                take( 6, 18) |
+                take( 8, 10) |
+                take(10,  2) |
+                take(12, 28) |
+                take(14, 20) |
+                take(16, 12) |
+                take(18,  4) |
+                take(20, 30) |
+                take(22, 22) |
+                take(24, 14) |
+                take(26,  6);
 
         };
         // Need to pre-render the font to RAM to be fast enough.
-        font_cache = (uint32_t*)malloc(4 * FONT->line_height * 96);
+        font_cache = (uint32_t*)malloc(4 * FONT_CP437_HEIGHT * 256);
+        if (!font_cache) {
+            dvhstx_debug("Not enough RAM for the font cache\n");
+            free_buffers();
+            return false;
+        }
         uint32_t* font_cache_ptr = font_cache;
-        for (int c = 0x20; c < 128; ++c) {
-            for (int y = 0; y < FONT->line_height; ++y) {
+        for (int c = 0; c < 256; ++c) {
+            for (int y = 0; y < FONT_CP437_HEIGHT; ++y) {
                 *font_cache_ptr++ = scramble(render_char_line(c, y));
             }
         }
@@ -743,6 +774,7 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
         break;
 
     case MODE_PALETTE:
+    case MODE_PALETTE1:
         // Configure HSTX's TMDS encoder for RGB888
         hstx_ctrl_hw->expand_tmds =
             7  << HSTX_CTRL_EXPAND_TMDS_L2_NBITS_LSB |
@@ -765,11 +797,11 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
         // Configure HSTX's TMDS encoder for 2bpp
         hstx_ctrl_hw->expand_tmds =
             1  << HSTX_CTRL_EXPAND_TMDS_L2_NBITS_LSB |
-            18 << HSTX_CTRL_EXPAND_TMDS_L2_ROT_LSB   |
+            20 << HSTX_CTRL_EXPAND_TMDS_L2_ROT_LSB   |
             1  << HSTX_CTRL_EXPAND_TMDS_L1_NBITS_LSB |
-            18  << HSTX_CTRL_EXPAND_TMDS_L1_ROT_LSB   |
+            20  << HSTX_CTRL_EXPAND_TMDS_L1_ROT_LSB   |
             1  << HSTX_CTRL_EXPAND_TMDS_L0_NBITS_LSB |
-            18  << HSTX_CTRL_EXPAND_TMDS_L0_ROT_LSB;
+            20  << HSTX_CTRL_EXPAND_TMDS_L0_ROT_LSB;
 
         // Pixels and control symbols (RAW) are an
         // entire 32-bit word.
@@ -814,8 +846,6 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
         2u << HSTX_CTRL_CSR_SHIFT_LSB |
         HSTX_CTRL_CSR_EN_BITS; 
 
-    // HSTX outputs 0 through 7 appear on GPIO 12 through 19.
-    constexpr int HSTX_FIRST_PIN = 12;
     // Assign clock pair to two neighbouring pins:
     hstx_ctrl_hw->bit[(pinout.clk_p    ) - HSTX_FIRST_PIN] = HSTX_CTRL_BIT0_CLK_BITS;
     hstx_ctrl_hw->bit[(pinout.clk_p ^ 1) - HSTX_FIRST_PIN] = HSTX_CTRL_BIT0_CLK_BITS | HSTX_CTRL_BIT0_INV_BITS;
@@ -839,6 +869,11 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
     }
 
     dvhstx_debug("GPIO configured\n");
+
+    if (audio_on && !audio_chan_claimed) {
+        dma_channel_claim(NUM_AUDIO_CHANS - 1);
+        audio_chan_claimed = true;
+    }
 
     // The channels are set up identically, to transfer a whole scanline and
     // then chain to the next channel. Each time a channel finishes, we
@@ -868,9 +903,9 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
         count_of(vblank_line_vsync_off),
         false
     );
-    for (int i = 2; i < NUM_CHANS; ++i) {
+    for (int i = 2; i < num_chans; ++i) {
         c = dma_channel_get_default_config(i);
-        channel_config_set_chain_to(&c, (i+1) % NUM_CHANS);
+        channel_config_set_chain_to(&c, (i+1) % num_chans);
         channel_config_set_dreq(&c, DREQ_HSTX);
         dma_channel_configure(
             i,
@@ -884,14 +919,16 @@ bool DVHSTX::init(uint16_t width, uint16_t height, Mode mode_, bool double_buffe
 
     dvhstx_debug("DMA channels claimed\n");
 
-    dma_hw->intr = (1 << NUM_CHANS) - 1;
-    dma_hw->ints2 = (1 << NUM_CHANS) - 1;
-    dma_hw->inte2 = (1 << NUM_CHANS) - 1;
-    if (is_text_mode) irq_set_exclusive_handler(DMA_IRQ_2, dma_irq_handler_text);
+    dma_hw->intr = (1 << num_chans) - 1;
+    dma_hw->ints2 = (1 << num_chans) - 1;
+    dma_hw->inte2 = (1 << num_chans) - 1;
+    if (audio_on) irq_set_exclusive_handler(DMA_IRQ_2, audio_irq);
+    else if (is_text_mode) irq_set_exclusive_handler(DMA_IRQ_2, dma_irq_handler_text);
     else irq_set_exclusive_handler(DMA_IRQ_2, dma_irq_handler);
     irq_set_priority(DMA_IRQ_2, PICO_HIGHEST_IRQ_PRIORITY);
     irq_set_enabled(DMA_IRQ_2, true);
 
+    prev_ch_mask = 1u << (num_chans - 1);
     dma_channel_start(0);
 
     dvhstx_debug("DVHSTX started\n");
@@ -912,8 +949,13 @@ void DVHSTX::reset() {
     irq_set_enabled(DMA_IRQ_2, false);
     irq_remove_handler(DMA_IRQ_2, irq_get_exclusive_handler(DMA_IRQ_2));
 
-    for (int i = 0; i < NUM_CHANS; ++i)
+    for (int i = 0; i < num_chans; ++i)
         dma_channel_abort(i);
+    if (audio_chan_claimed) {
+        dma_irqn_set_channel_enabled(2, NUM_AUDIO_CHANS - 1, false);
+        dma_channel_unclaim(NUM_AUDIO_CHANS - 1);
+        audio_chan_claimed = false;
+    }
 
     if (font_cache) {
         free(font_cache);

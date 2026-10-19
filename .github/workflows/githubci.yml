@@ -42,7 +42,7 @@ jobs:
     - name: pre-install
       run: bash ci/actions_install.sh
     - name: clang
-      run: python3 ci/run-clang-format.py -e "ci/*" -e "bin/*" -e "./src/drivers/dvhstx" -e './.git' -r .
+      run: python3 ci/run-clang-format.py -e "ci/*" -e "bin/*" -e "./src/drivers/dvhstx" -e "./src/pico_hdmi" -e './.git' -r .
 
   doxygen:
     runs-on: ubuntu-latest

@@ -941,13 +941,13 @@ void DVHSTX::reset() {
     if (!inited) return;
     inited = false;
 
-    if (display == this)
-        display = nullptr;
-
     hstx_ctrl_hw->csr = 0;
 
     irq_set_enabled(DMA_IRQ_2, false);
     irq_remove_handler(DMA_IRQ_2, irq_get_exclusive_handler(DMA_IRQ_2));
+
+    if (display == this)
+        display = nullptr;
 
     for (int i = 0; i < num_chans; ++i)
         dma_channel_abort(i);
